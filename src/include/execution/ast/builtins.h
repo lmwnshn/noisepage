@@ -155,6 +155,7 @@ namespace terrier::execution::ast {
   F(JoinHashTableInsert, joinHTInsert)                                  \
   F(JoinHashTableBuild, joinHTBuild)                                    \
   F(JoinHashTableBuildParallel, joinHTBuildParallel)                    \
+  F(JoinHashTableGetTupleCount, joinHTGetTupleCount)                    \
   F(JoinHashTableLookup, joinHTLookup)                                  \
   F(JoinHashTableFree, joinHTFree)                                      \
                                                                         \

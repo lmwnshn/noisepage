@@ -1330,6 +1330,12 @@ void BytecodeGenerator::VisitBuiltinJoinHashTableCall(ast::CallExpr *call, ast::
       GetExecutionResult()->SetDestination(dest.ValueOf());
       break;
     }
+    case ast::Builtin::JoinHashTableGetTupleCount: {
+      LocalVar dest = GetExecutionResult()->GetOrCreateDestination(call->GetType());
+      GetEmitter()->Emit(Bytecode::JoinHashTableGetTupleCount, dest, join_hash_table);
+      GetExecutionResult()->SetDestination(dest.ValueOf());
+      break;
+    }
     case ast::Builtin::JoinHashTableBuild: {
       GetEmitter()->Emit(Bytecode::JoinHashTableBuild, join_hash_table);
       break;
@@ -2289,6 +2295,7 @@ void BytecodeGenerator::VisitBuiltinCallExpr(ast::CallExpr *call) {
     }
     case ast::Builtin::JoinHashTableInit:
     case ast::Builtin::JoinHashTableInsert:
+    case ast::Builtin::JoinHashTableGetTupleCount:
     case ast::Builtin::JoinHashTableBuild:
     case ast::Builtin::JoinHashTableBuildParallel:
     case ast::Builtin::JoinHashTableLookup:

@@ -689,6 +689,24 @@ void Sema::CheckBuiltinJoinHashTableInsert(ast::CallExpr *call) {
   call->SetType(GetBuiltinType(byte_kind)->PointerTo());
 }
 
+void Sema::CheckBuiltinJoinHashTableGetTupleCount(ast::CallExpr *call) {
+  if (!CheckArgCount(call, 1)) {
+    return;
+  }
+
+  const auto &call_args = call->Arguments();
+
+  // The first and only argument must be a pointer to a JoinHashTable.
+  const auto jht_kind = ast::BuiltinType::JoinHashTable;
+  if (!IsPointerToSpecificBuiltin(call_args[0]->GetType(), jht_kind)) {
+    ReportIncorrectCallArg(call, 0, GetBuiltinType(jht_kind)->PointerTo());
+    return;
+  }
+
+  // This call returns the tuple count.
+  call->SetType(GetBuiltinType(ast::BuiltinType::Uint64));
+}
+
 void Sema::CheckBuiltinJoinHashTableBuild(ast::CallExpr *call, ast::Builtin builtin) {
   if (!CheckArgCountAtLeast(call, 1)) {
     return;
@@ -696,7 +714,7 @@ void Sema::CheckBuiltinJoinHashTableBuild(ast::CallExpr *call, ast::Builtin buil
 
   const auto &call_args = call->Arguments();
 
-  // The first and only argument must be a pointer to a JoinHashTable
+  // The first argument must be a pointer to a JoinHashTable
   const auto jht_kind = ast::BuiltinType::JoinHashTable;
   if (!IsPointerToSpecificBuiltin(call_args[0]->GetType(), jht_kind)) {
     ReportIncorrectCallArg(call, 0, GetBuiltinType(jht_kind)->PointerTo());
@@ -2671,6 +2689,10 @@ void Sema::CheckBuiltinCall(ast::CallExpr *call) {
     }
     case ast::Builtin::JoinHashTableInsert: {
       CheckBuiltinJoinHashTableInsert(call);
+      break;
+    }
+    case ast::Builtin::JoinHashTableGetTupleCount: {
+      CheckBuiltinJoinHashTableGetTupleCount(call);
       break;
     }
     case ast::Builtin::JoinHashTableBuild:

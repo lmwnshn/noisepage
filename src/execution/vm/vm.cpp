@@ -1451,6 +1451,13 @@ void VM::Interpret(const uint8_t *ip, Frame *frame) {  // NOLINT
     DISPATCH_NEXT();
   }
 
+  OP(JoinHashTableGetTupleCount) : {
+    auto *result = frame->LocalAt<uint64_t *>(READ_LOCAL_ID());
+    auto *join_hash_table = frame->LocalAt<sql::JoinHashTable *>(READ_LOCAL_ID());
+    OpJoinHashTableGetTupleCount(result, join_hash_table);
+    DISPATCH_NEXT();
+  }
+
   OP(JoinHashTableBuild) : {
     auto *join_hash_table = frame->LocalAt<sql::JoinHashTable *>(READ_LOCAL_ID());
     OpJoinHashTableBuild(join_hash_table);
