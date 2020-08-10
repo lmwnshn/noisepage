@@ -1,10 +1,21 @@
 #include "execution/exec/execution_context.h"
 
 #include "brain/operating_unit.h"
+#include "brain/operating_unit_util.h"
 #include "common/thread_context.h"
 #include "execution/sql/value.h"
 #include "metrics/metrics_store.h"
 #include "parser/expression/constant_value_expression.h"
+
+namespace {
+
+/** @return True if the corresponding metrics component is enabled. */
+bool IsMetricsComponentEnabled(terrier::metrics::MetricsComponent component) {
+  return terrier::common::thread_context.metrics_store_ != nullptr &&
+         terrier::common::thread_context.metrics_store_->ComponentToRecord(component);
+}
+
+}  // namespace
 
 namespace terrier::execution::exec {
 
@@ -23,38 +34,102 @@ uint32_t ExecutionContext::ComputeTupleSize(const planner::OutputSchema *schema)
 void ExecutionContext::StartResourceTracker(metrics::MetricsComponent component) {
   TERRIER_ASSERT(
       component == metrics::MetricsComponent::EXECUTION || component == metrics::MetricsComponent::EXECUTION_PIPELINE,
-      "StartResourceTracker() invoked with incorrect MetricsComponent");
+      "StartResourceTracker() invoked with incorrect MetricsComponent.");
 
-  if (common::thread_context.metrics_store_ != nullptr &&
-      common::thread_context.metrics_store_->ComponentToRecord(component)) {
-    // start the operating unit resource tracker
+  if (IsMetricsComponentEnabled(component)) {
+    // Start the operating unit resource tracker.
     common::thread_context.resource_tracker_.Start();
     mem_tracker_->Reset();
   }
 }
 
 void ExecutionContext::EndResourceTracker(const char *name, uint32_t len) {
-  if (common::thread_context.metrics_store_ != nullptr &&
-      common::thread_context.metrics_store_->ComponentToRecord(metrics::MetricsComponent::EXECUTION)) {
+  constexpr metrics::MetricsComponent component = metrics::MetricsComponent::EXECUTION;
+
+  if (IsMetricsComponentEnabled(component)) {
     common::thread_context.resource_tracker_.Stop();
     common::thread_context.resource_tracker_.SetMemory(mem_tracker_->GetAllocatedSize());
-    auto &resource_metrics = common::thread_context.resource_tracker_.GetMetrics();
+    const auto &resource_metrics = common::thread_context.resource_tracker_.GetMetrics();
     common::thread_context.metrics_store_->RecordExecutionData(name, len, execution_mode_, resource_metrics);
   }
 }
 
-void ExecutionContext::EndPipelineTracker(query_id_t query_id, pipeline_id_t pipeline) {
-  if (common::thread_context.metrics_store_ != nullptr &&
-      common::thread_context.metrics_store_->ComponentToRecord(metrics::MetricsComponent::EXECUTION_PIPELINE)) {
+void ExecutionContext::StartPipelineTracker(pipeline_id_t pipeline_id) {
+  constexpr metrics::MetricsComponent component = metrics::MetricsComponent::EXECUTION_PIPELINE;
+
+  if (IsMetricsComponentEnabled(component)) {
+    // Start the resource tracker.
+    StartResourceTracker(component);
+    // Save a copy of the pipeline's features as the features will be updated in-place later.
+    TERRIER_ASSERT(pipeline_operating_units_ != nullptr, "PipelineOperatingUnits should not be null");
+    pipeline_features_map_[pipeline_id] = pipeline_operating_units_->GetPipelineFeatures(pipeline_id);
+  }
+}
+
+void ExecutionContext::EndPipelineTracker(query_id_t query_id, pipeline_id_t pipeline_id) {
+  constexpr metrics::MetricsComponent component = metrics::MetricsComponent::EXECUTION_PIPELINE;
+
+  if (IsMetricsComponentEnabled(component)) {
     common::thread_context.resource_tracker_.Stop();
     common::thread_context.resource_tracker_.SetMemory(mem_tracker_->GetAllocatedSize());
-    auto &resource_metrics = common::thread_context.resource_tracker_.GetMetrics();
+    const auto &resource_metrics = common::thread_context.resource_tracker_.GetMetrics();
 
-    // TODO(wz2): With a query cache, see if we can avoid this copy
-    TERRIER_ASSERT(pipeline_operating_units_ != nullptr, "PipelineOperatingUnits should not be null");
-    brain::ExecutionOperatingUnitFeatureVector features(pipeline_operating_units_->GetPipelineFeatures(pipeline));
-    common::thread_context.metrics_store_->RecordPipelineData(query_id, pipeline, execution_mode_, std::move(features),
-                                                              resource_metrics);
+    common::thread_context.metrics_store_->RecordPipelineData(
+        query_id, pipeline_id, execution_mode_, std::move(pipeline_features_map_[pipeline_id]), resource_metrics);
+  }
+}
+
+void ExecutionContext::GetFeature(uint32_t *value, pipeline_id_t pipeline_id, feature_id_t feature_id,
+                                  brain::ExecutionOperatingUnitFeatureAttribute feature_attribute) {
+  constexpr metrics::MetricsComponent component = metrics::MetricsComponent::EXECUTION_PIPELINE;
+
+  if (IsMetricsComponentEnabled(component)) {
+    auto &features = pipeline_features_map_[pipeline_id];
+    for (auto &feature : features) {
+      if (feature_id == feature.GetFeatureId()) {
+        uint64_t val;
+        switch (feature_attribute) {
+          case brain::ExecutionOperatingUnitFeatureAttribute::NUM_ROWS: {
+            val = feature.GetNumRows();
+            break;
+          }
+          case brain::ExecutionOperatingUnitFeatureAttribute::CARDINALITY: {
+            val = feature.GetCardinality();
+            break;
+          }
+          default:
+            UNREACHABLE("Invalid feature attribute.");
+        }
+        *value = val;
+        break;
+      }
+    }
+  }
+}
+
+void ExecutionContext::RecordFeature(pipeline_id_t pipeline_id, feature_id_t feature_id,
+                                     brain::ExecutionOperatingUnitFeatureAttribute feature_attribute, uint32_t value) {
+  constexpr metrics::MetricsComponent component = metrics::MetricsComponent::EXECUTION_PIPELINE;
+
+  if (IsMetricsComponentEnabled(component)) {
+    auto &features = pipeline_features_map_[pipeline_id];
+    for (auto &feature : features) {
+      if (feature_id == feature.GetFeatureId()) {
+        switch (feature_attribute) {
+          case brain::ExecutionOperatingUnitFeatureAttribute::NUM_ROWS: {
+            feature.SetNumRows(value);
+            break;
+          }
+          case brain::ExecutionOperatingUnitFeatureAttribute::CARDINALITY: {
+            feature.SetCardinality(value);
+            break;
+          }
+          default:
+            UNREACHABLE("Invalid feature attribute.");
+        }
+        break;
+      }
+    }
   }
 }
 
