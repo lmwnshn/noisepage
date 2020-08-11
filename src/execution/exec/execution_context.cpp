@@ -62,7 +62,8 @@ void ExecutionContext::StartPipelineTracker(pipeline_id_t pipeline_id) {
     StartResourceTracker(component);
     // Save a copy of the pipeline's features as the features will be updated in-place later.
     TERRIER_ASSERT(pipeline_operating_units_ != nullptr, "PipelineOperatingUnits should not be null");
-    pipeline_features_map_[pipeline_id] = pipeline_operating_units_->GetPipelineFeatures(pipeline_id);
+    current_pipeline_features_id_ = pipeline_id;
+    current_pipeline_features_ = pipeline_operating_units_->GetPipelineFeatures(pipeline_id);
   }
 }
 
@@ -74,8 +75,8 @@ void ExecutionContext::EndPipelineTracker(query_id_t query_id, pipeline_id_t pip
     common::thread_context.resource_tracker_.SetMemory(mem_tracker_->GetAllocatedSize());
     const auto &resource_metrics = common::thread_context.resource_tracker_.GetMetrics();
 
-    common::thread_context.metrics_store_->RecordPipelineData(
-        query_id, pipeline_id, execution_mode_, std::move(pipeline_features_map_[pipeline_id]), resource_metrics);
+    common::thread_context.metrics_store_->RecordPipelineData(query_id, pipeline_id, execution_mode_,
+                                                              std::move(current_pipeline_features_), resource_metrics);
   }
 }
 
@@ -84,7 +85,8 @@ void ExecutionContext::GetFeature(uint32_t *value, pipeline_id_t pipeline_id, fe
   constexpr metrics::MetricsComponent component = metrics::MetricsComponent::EXECUTION_PIPELINE;
 
   if (IsMetricsComponentEnabled(component)) {
-    auto &features = pipeline_features_map_[pipeline_id];
+    TERRIER_ASSERT(pipeline_id == current_pipeline_features_id_, "That's not the current pipeline.");
+    auto &features = current_pipeline_features_;
     for (auto &feature : features) {
       if (feature_id == feature.GetFeatureId()) {
         uint64_t val;
@@ -112,7 +114,8 @@ void ExecutionContext::RecordFeature(pipeline_id_t pipeline_id, feature_id_t fea
   constexpr metrics::MetricsComponent component = metrics::MetricsComponent::EXECUTION_PIPELINE;
 
   if (IsMetricsComponentEnabled(component)) {
-    auto &features = pipeline_features_map_[pipeline_id];
+    TERRIER_ASSERT(pipeline_id == current_pipeline_features_id_, "That's not the current pipeline.");
+    auto &features = current_pipeline_features_;
     for (auto &feature : features) {
       if (feature_id == feature.GetFeatureId()) {
         switch (feature_attribute) {

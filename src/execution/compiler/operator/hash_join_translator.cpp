@@ -183,6 +183,9 @@ void HashJoinTranslator::ProbeJoinHashTable(WorkContext *ctx, FunctionBuilder *f
       codegen->MakeStmt(codegen->JoinHashTableLookup(global_join_ht_.GetPtr(codegen), entry_iter, hash_val));
   auto has_next_call = codegen->HTEntryIterHasNext(entry_iter);
 
+  // queryState.num_probes = queryState.num_probes + 1
+  function->Append(num_probes_increment);
+
   // The probe depends on the join type
   if (join_plan.RequiresRightMark()) {
     // First declare the right mark.
@@ -190,8 +193,6 @@ void HashJoinTranslator::ProbeJoinHashTable(WorkContext *ctx, FunctionBuilder *f
     ast::Expr *right_mark = codegen->MakeExpr(right_mark_var);
     function->Append(codegen->DeclareVarWithInit(right_mark_var, codegen->ConstBool(true)));
 
-    // queryState.num_probes = queryState.num_probes + 1
-    function->Append(num_probes_increment);
     // Probe hash table and check for a match. Loop condition becomes false as
     // soon as a match is found.
     auto loop_cond = codegen->BinaryOp(parsing::Token::Type::AND, right_mark, has_next_call);
@@ -220,8 +221,6 @@ void HashJoinTranslator::ProbeJoinHashTable(WorkContext *ctx, FunctionBuilder *f
       right_semi_check.EndIf();
     }
   } else {
-    // queryState.num_probes = queryState.num_probes + 1
-    function->Append(num_probes_increment);
     // For regular joins: while (has_next)
     Loop entry_loop(function, lookup_call, has_next_call, nullptr);
     {

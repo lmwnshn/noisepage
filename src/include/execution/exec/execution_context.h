@@ -205,7 +205,10 @@ class EXPORT ExecutionContext {
   // TODO(WAN): EXEC PORT we used to push the memory tracker into the string allocator, do this
   sql::VarlenHeap string_allocator_;
   common::ManagedPointer<brain::PipelineOperatingUnits> pipeline_operating_units_;
-  std::unordered_map<pipeline_id_t, std::vector<brain::ExecutionOperatingUnitFeature>> pipeline_features_map_;
+
+  pipeline_id_t current_pipeline_features_id_;
+  std::vector<brain::ExecutionOperatingUnitFeature> current_pipeline_features_;
+
   common::ManagedPointer<catalog::CatalogAccessor> accessor_;
   common::ManagedPointer<const std::vector<parser::ConstantValueExpression>> params_;
   uint8_t execution_mode_;
