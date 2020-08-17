@@ -50,4 +50,7 @@ enum class ExecutionOperatingUnitType : uint32_t {
   OP_BOOL_COMPARE
 };
 
+/** The attributes of an ExecutionOperatingUnitFeature that can be set from TPL. */
+enum class ExecutionOperatingUnitFeatureAttribute : uint8_t { NUM_ROWS, CARDINALITY };
+
 }  // namespace terrier::brain

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "brain/brain_defs.h"
+#include "brain/operating_unit.h"
 #include "parser/expression/abstract_expression.h"
 
 namespace terrier::brain {
@@ -162,6 +163,22 @@ class OperatingUnitUtil {
     }
 
     return feature_types;
+  }
+
+  /** @return The ExecutionOperatingUnitFeature that has the corresponding type. It must be unique in the vector. */
+  static const ExecutionOperatingUnitFeature &GetFeature(const std::vector<ExecutionOperatingUnitFeature> &features,
+                                                         ExecutionOperatingUnitType type) {
+    bool found = false;
+    size_t idx = 0;
+    for (size_t i = 0; i < features.size(); ++i) {
+      if (type == features[i].GetExecutionOperatingUnitType()) {
+        TERRIER_ASSERT(!found, "There are multiple features of the same type.");
+        found = true;
+        idx = i;
+      }
+    }
+    TERRIER_ASSERT(found, "The feature was not found.");
+    return features[idx];
   }
 };
 

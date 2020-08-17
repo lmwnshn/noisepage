@@ -10,6 +10,7 @@
 #include "execution/util/region_containers.h"
 
 namespace terrier::brain {
+class ExecutionOperatingUnitFeature;
 class OperatingUnitRecorder;
 }  // namespace terrier::brain
 
@@ -251,9 +252,9 @@ class OperatorTranslator : public ColumnValueProvider {
   /** Set the parent translator.. */
   void SetParentTranslator(common::ManagedPointer<OperatorTranslator> translator) { parent_translator_ = translator; }
   friend class brain::OperatingUnitRecorder;
-  /** @returns The child translator. */
+  /** @return The child translator. */
   common::ManagedPointer<OperatorTranslator> GetChildTranslator() const { return child_translator_; }
-  /** @returns The parent translator. */
+  /** @return The parent translator. */
   common::ManagedPointer<OperatorTranslator> GetParentTranslator() const { return parent_translator_; }
 
  private:
