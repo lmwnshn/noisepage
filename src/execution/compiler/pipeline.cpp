@@ -90,10 +90,10 @@ ast::Identifier Pipeline::GetWorkFunctionName() const {
 }
 
 void Pipeline::InjectStartResourceTracker(FunctionBuilder *builder) const {
-  // Inject StartResourceTracker()
+  // Inject StartPipelineTracker()
   std::vector<ast::Expr *> args{compilation_context_->GetExecutionContextPtrFromQueryState(),
-                                codegen_->Const64(static_cast<uint8_t>(metrics::MetricsComponent::EXECUTION_PIPELINE))};
-  auto start_call = codegen_->CallBuiltin(ast::Builtin::ExecutionContextStartResourceTracker, args);
+                                codegen_->Const64(!GetPipelineId())};
+  auto start_call = codegen_->CallBuiltin(ast::Builtin::ExecutionContextStartPipelineTracker, args);
   builder->Append(codegen_->MakeStmt(start_call));
 }
 

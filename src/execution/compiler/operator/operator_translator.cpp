@@ -9,9 +9,15 @@
 
 namespace terrier::execution::compiler {
 
+std::atomic<execution::translator_id_t> OperatorTranslator::translator_id_counter{20000};
+
 OperatorTranslator::OperatorTranslator(const planner::AbstractPlanNode &plan, CompilationContext *compilation_context,
                                        Pipeline *pipeline, brain::ExecutionOperatingUnitType feature_type)
-    : plan_(plan), compilation_context_(compilation_context), pipeline_(pipeline), feature_type_(feature_type) {
+    : translator_id_(translator_id_counter++),
+      plan_(plan),
+      compilation_context_(compilation_context),
+      pipeline_(pipeline),
+      feature_type_(feature_type) {
   TERRIER_ASSERT(plan.GetOutputSchema() != nullptr, "Output schema shouldn't be null");
   // Register this operator.
   pipeline->RegisterStep(this);

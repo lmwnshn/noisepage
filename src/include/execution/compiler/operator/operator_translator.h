@@ -7,6 +7,7 @@
 #include "common/macros.h"
 #include "execution/ast/ast_fwd.h"
 #include "execution/compiler/expression/column_value_provider.h"
+#include "execution/exec_defs.h"
 #include "execution/util/region_containers.h"
 
 namespace terrier::brain {
@@ -244,6 +245,9 @@ class OperatorTranslator : public ColumnValueProvider {
   void GetAllChildOutputFields(uint32_t child_index, const std::string &field_name_prefix,
                                util::RegionVector<ast::FieldDecl *> *fields) const;
 
+  /** @return The ID of this OperatorTranslator, used for identifying features in operating unit feature vectors. */
+  execution::translator_id_t GetTranslatorId() const { return translator_id_; }
+
  private:
   // For mini-runner stuff.
   friend class Pipeline;
@@ -258,6 +262,9 @@ class OperatorTranslator : public ColumnValueProvider {
   common::ManagedPointer<OperatorTranslator> GetParentTranslator() const { return parent_translator_; }
 
  private:
+  static std::atomic<execution::translator_id_t> translator_id_counter;
+  execution::translator_id_t translator_id_;
+
   // The plan node.
   const planner::AbstractPlanNode &plan_;
   // The compilation context.

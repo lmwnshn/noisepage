@@ -120,11 +120,11 @@ void ExecutionContext::RecordFeature(pipeline_id_t pipeline_id, feature_id_t fea
       if (feature_id == feature.GetFeatureId()) {
         switch (feature_attribute) {
           case brain::ExecutionOperatingUnitFeatureAttribute::NUM_ROWS: {
-            feature.SetNumRows(value);
+//            feature.SetNumRows(value);
             break;
           }
           case brain::ExecutionOperatingUnitFeatureAttribute::CARDINALITY: {
-            feature.SetCardinality(value);
+//            feature.SetCardinality(value);
             break;
           }
           default:

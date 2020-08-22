@@ -229,6 +229,14 @@ SETTING_bool(
 )
 
 SETTING_bool(
+    metrics_counters,
+    "Metrics collection for pipelines (whether counters should be enabled).",
+    false,
+    true,
+    terrier::settings::Callbacks::NoOp
+)
+
+SETTING_bool(
     use_query_cache,
     "Extended Query protocol caches physical plans and generated code after first execution. Warning: bugs with DDL changes.",
     true,

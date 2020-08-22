@@ -4,6 +4,8 @@
 #include <utility>
 #include <vector>
 
+#include "brain/brain_defs.h"
+#include "brain/operating_unit.h"
 #include "common/managed_pointer.h"
 #include "execution/exec/output.h"
 #include "execution/exec_defs.h"

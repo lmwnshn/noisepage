@@ -83,13 +83,16 @@ void HashJoinTranslator::InitializeQueryState(FunctionBuilder *function) const {
 void HashJoinTranslator::TearDownQueryState(FunctionBuilder *function) const {
   auto *codegen = GetCodeGen();
   TearDownJoinHashTable(function, global_join_ht_.GetPtr(codegen));
+  /*
   // @execCtxRecordFeature(exec_ctx, pipeline_id, feature_id, NUM_ROWS, queryState.num_probes)
   pipeline_id_t pipeline_id = probing_pipeline_id_;
   const auto &features = this->GetCodeGen()->GetPipelineOperatingUnits()->GetPipelineFeatures(pipeline_id);
-  const auto &feature = brain::OperatingUnitUtil::GetFeature(features, brain::ExecutionOperatingUnitType::HASH_JOIN);
+  const auto &feature = brain::OperatingUnitUtil::GetFeature(GetTranslatorId(), features,
+                                                             brain::ExecutionOperatingUnitType::HASHJOIN_PROBE);
   function->Append(codegen->ExecCtxRecordFeature(GetExecutionContext(), pipeline_id, feature.GetFeatureId(),
                                                  brain::ExecutionOperatingUnitFeatureAttribute::NUM_ROWS,
                                                  num_probes_.Get(codegen)));
+                                                 */
 }
 
 void HashJoinTranslator::InitializePipelineState(const Pipeline &pipeline, FunctionBuilder *function) const {
@@ -304,7 +307,8 @@ void HashJoinTranslator::FinishPipelineWork(const Pipeline &pipeline, FunctionBu
     // @execCtxRecordFeature(exec_ctx, pipeline_id, feature_id, CARDINALITY, tuple_count)
     pipeline_id_t pipeline_id = pipeline.GetPipelineId();
     const auto &features = this->GetCodeGen()->GetPipelineOperatingUnits()->GetPipelineFeatures(pipeline_id);
-    const auto &feature = brain::OperatingUnitUtil::GetFeature(features, brain::ExecutionOperatingUnitType::HASH_JOIN);
+    const auto &feature = brain::OperatingUnitUtil::GetFeature(GetTranslatorId(), features,
+                                                               brain::ExecutionOperatingUnitType::HASHJOIN_BUILD);
     function->Append(codegen->ExecCtxRecordFeature(GetExecutionContext(), pipeline_id, feature.GetFeatureId(),
                                                    brain::ExecutionOperatingUnitFeatureAttribute::CARDINALITY,
                                                    codegen->MakeExpr(tuple_count)));

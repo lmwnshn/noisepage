@@ -166,12 +166,15 @@ class OperatingUnitUtil {
   }
 
   /** @return The ExecutionOperatingUnitFeature that has the corresponding type. It must be unique in the vector. */
-  static const ExecutionOperatingUnitFeature &GetFeature(const std::vector<ExecutionOperatingUnitFeature> &features,
+  static const ExecutionOperatingUnitFeature &GetFeature(execution::translator_id_t translator_id,
+                                                         const std::vector<ExecutionOperatingUnitFeature> &features,
                                                          ExecutionOperatingUnitType type) {
-    bool found = false;
+    UNUSED_ATTRIBUTE bool found = false;
     size_t idx = 0;
     for (size_t i = 0; i < features.size(); ++i) {
-      if (type == features[i].GetExecutionOperatingUnitType()) {
+      bool same_translator = translator_id == features[i].GetTranslatorId();
+      bool same_feature = type == features[i].GetExecutionOperatingUnitType();
+      if (same_translator && same_feature) {
         TERRIER_ASSERT(!found, "There are multiple features of the same type.");
         found = true;
         idx = i;
