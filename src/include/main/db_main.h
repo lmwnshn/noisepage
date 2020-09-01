@@ -665,6 +665,7 @@ class DBMain {
     uint16_t network_port_ = 15721;
     uint16_t connection_thread_count_ = 4;
     bool use_network_ = false;
+    bool with_pilot_ = false;
 
     /**
      * Instantiates the SettingsManager and reads all of the settings to override the Builder's settings.
@@ -712,6 +713,7 @@ class DBMain {
       metrics_gc_ = settings_manager->GetBool(settings::Param::metrics_gc);
       metrics_bind_command_ = settings_manager->GetBool(settings::Param::metrics_bind_command);
       metrics_execute_command_ = settings_manager->GetBool(settings::Param::metrics_execute_command);
+      with_pilot_ = settings_manager->GetBool(settings::Param::with_pilot);
 
       return settings_manager;
     }

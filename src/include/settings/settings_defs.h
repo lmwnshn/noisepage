@@ -244,6 +244,14 @@ SETTING_bool(
     terrier::settings::Callbacks::NoOp
 )
 
+SETTING_bool(
+    with_pilot,
+    "Start pilot process alongside with the main database. (default: false).",
+    false,
+    false,
+    terrier::settings::Callbacks::NoOp
+)
+
 SETTING_string(
     application_name,
     "The name of the application (default: NO_NAME)",
