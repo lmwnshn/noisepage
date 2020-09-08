@@ -18,6 +18,7 @@
 #include "storage/garbage_collector_thread.h"
 #include "transaction/deferred_action_manager.h"
 #include "transaction/transaction_manager.h"
+#include "pilot/pilot_manager.h"
 
 namespace terrier {
 
@@ -362,6 +363,12 @@ class DBMain {
             std::make_unique<NetworkLayer>(common::ManagedPointer(thread_registry), common::ManagedPointer(traffic_cop),
                                            network_port_, connection_thread_count_);
       }
+      // TODO(ricky)
+      // Initialize the Pilot here
+      std::unique_ptr<pilot::PilotManager> pilot_manager = DISABLED;
+      if(with_pilot_) {
+        pilot_manager = std::make_unique<pilot::PilotManager>();
+      }
 
       db_main->settings_manager_ = std::move(settings_manager);
       db_main->metrics_manager_ = std::move(metrics_manager);
@@ -377,6 +384,7 @@ class DBMain {
       db_main->execution_layer_ = std::move(execution_layer);
       db_main->traffic_cop_ = std::move(traffic_cop);
       db_main->network_layer_ = std::move(network_layer);
+      db_main->pilot_ = std::move(pilot_manager);
 
       return db_main;
     }
@@ -836,6 +844,7 @@ class DBMain {
   std::unique_ptr<ExecutionLayer> execution_layer_;
   std::unique_ptr<trafficcop::TrafficCop> traffic_cop_;
   std::unique_ptr<NetworkLayer> network_layer_;
+  std::unique_ptr<pilot::PilotManager> pilot_;
 };
 
 }  // namespace terrier
