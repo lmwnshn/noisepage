@@ -247,7 +247,7 @@ SETTING_bool(
 SETTING_bool(
     with_pilot,
     "Start pilot process alongside with the main database. (default: false).",
-    false,
+    true,
     false,
     terrier::settings::Callbacks::NoOp
 )

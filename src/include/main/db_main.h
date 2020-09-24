@@ -367,7 +367,7 @@ class DBMain {
       // Initialize the Pilot here
       std::unique_ptr<pilot::PilotManager> pilot_manager = DISABLED;
       if(with_pilot_) {
-        pilot_manager = std::make_unique<pilot::PilotManager>();
+        pilot_manager = std::make_unique<pilot::PilotManager>("../../script/model/pilot.py");
       }
 
       db_main->settings_manager_ = std::move(settings_manager);
