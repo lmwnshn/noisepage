@@ -8,6 +8,7 @@
 #include "catalog/catalog.h"
 #include "common/action_context.h"
 #include "common/managed_pointer.h"
+#include "messenger/messenger.h"
 #include "metrics/metrics_thread.h"
 #include "network/postgres/postgres_command_factory.h"
 #include "network/postgres/postgres_protocol_interpreter.h"
@@ -230,17 +231,18 @@ class DBMain {
      * @param traffic_cop argument to the ConnectionHandleFactor
      * @param port argument to TerrierServer
      * @param connection_thread_count argument to TerrierServer
+     * @param socket_directory argument to TerrierServer
      */
     NetworkLayer(const common::ManagedPointer<common::DedicatedThreadRegistry> thread_registry,
                  const common::ManagedPointer<trafficcop::TrafficCop> traffic_cop, const uint16_t port,
-                 const uint16_t connection_thread_count) {
+                 const uint16_t connection_thread_count, const std::string socket_directory) {
       connection_handle_factory_ = std::make_unique<network::ConnectionHandleFactory>(traffic_cop);
       command_factory_ = std::make_unique<network::PostgresCommandFactory>();
       provider_ =
           std::make_unique<network::PostgresProtocolInterpreter::Provider>(common::ManagedPointer(command_factory_));
-      server_ = std::make_unique<network::TerrierServer>(common::ManagedPointer(provider_),
-                                                         common::ManagedPointer(connection_handle_factory_),
-                                                         thread_registry, port, connection_thread_count);
+      server_ = std::make_unique<network::TerrierServer>(
+          common::ManagedPointer(provider_), common::ManagedPointer(connection_handle_factory_), thread_registry, port,
+          connection_thread_count, socket_directory);
     }
 
     /**
@@ -264,6 +266,18 @@ class DBMain {
    public:
     ExecutionLayer();
     ~ExecutionLayer();
+  };
+
+  /** Hopping on the bandwagon. TODO(WAN): better comment. */
+  class MessengerLayer {
+   public:
+    explicit MessengerLayer(const common::ManagedPointer<common::DedicatedThreadRegistry> thread_registry)
+        : messenger_owner_(std::make_unique<messenger::MessengerOwner>(thread_registry)) {}
+
+    ~MessengerLayer() = default;
+
+   private:
+    std::unique_ptr<messenger::MessengerOwner> messenger_owner_;
   };
 
   /**
@@ -361,7 +375,12 @@ class DBMain {
         TERRIER_ASSERT(use_traffic_cop_ && traffic_cop != DISABLED, "NetworkLayer needs TrafficCopLayer.");
         network_layer =
             std::make_unique<NetworkLayer>(common::ManagedPointer(thread_registry), common::ManagedPointer(traffic_cop),
-                                           network_port_, connection_thread_count_);
+                                           network_port_, connection_thread_count_, uds_file_directory_);
+      }
+
+      std::unique_ptr<MessengerLayer> messenger_layer = DISABLED;
+      if (use_messenger_) {
+        messenger_layer = std::make_unique<MessengerLayer>(common::ManagedPointer(thread_registry));
       }
       // TODO(ricky)
       // Initialize the Pilot here
@@ -385,6 +404,7 @@ class DBMain {
       db_main->traffic_cop_ = std::move(traffic_cop);
       db_main->network_layer_ = std::move(network_layer);
       db_main->pilot_ = std::move(pilot_manager);
+      db_main->messenger_layer_ = std::move(messenger_layer);
 
       return db_main;
     }
@@ -552,6 +572,15 @@ class DBMain {
     }
 
     /**
+     * @param value use component
+     * @return self reference for chaining
+     */
+    Builder &SetUseMessenger(const bool value) {
+      use_messenger_ = value;
+      return *this;
+    }
+
+    /**
      * @param port Network port
      * @return self reference for chaining
      */
@@ -671,9 +700,11 @@ class DBMain {
     bool use_query_cache_ = true;
     execution::vm::ExecutionMode execution_mode_ = execution::vm::ExecutionMode::Interpret;
     uint16_t network_port_ = 15721;
+    std::string uds_file_directory_ = "/tmp/";
     uint16_t connection_thread_count_ = 4;
     bool use_network_ = false;
     bool with_pilot_ = false;
+    bool use_messenger_ = false;
 
     /**
      * Instantiates the SettingsManager and reads all of the settings to override the Builder's settings.
@@ -705,6 +736,7 @@ class DBMain {
 
       gc_interval_ = settings_manager->GetInt(settings::Param::gc_interval);
 
+      uds_file_directory_ = settings_manager->GetString(settings::Param::uds_file_directory);
       network_port_ = static_cast<uint16_t>(settings_manager->GetInt(settings::Param::port));
       connection_thread_count_ =
           static_cast<uint16_t>(settings_manager->GetInt(settings::Param::connection_thread_count));
@@ -732,7 +764,7 @@ class DBMain {
      */
     std::unique_ptr<metrics::MetricsManager> BootstrapMetricsManager() {
       std::unique_ptr<metrics::MetricsManager> metrics_manager = std::make_unique<metrics::MetricsManager>();
-      if (metrics_pipeline_) metrics_manager->EnableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE, 0);
+      if (metrics_pipeline_) metrics_manager->EnableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE, 9);
       if (metrics_transaction_) metrics_manager->EnableMetric(metrics::MetricsComponent::TRANSACTION, 0);
       if (metrics_logging_) metrics_manager->EnableMetric(metrics::MetricsComponent::LOGGING, 0);
       if (metrics_gc_) metrics_manager->EnableMetric(metrics::MetricsComponent::GARBAGECOLLECTION, 0);
@@ -827,6 +859,9 @@ class DBMain {
    */
   common::ManagedPointer<ExecutionLayer> GetExecutionLayer() const { return common::ManagedPointer(execution_layer_); }
 
+  /** @return ManagedPointer to the MessengerLayer, can be nullptr if disabled. */
+  common::ManagedPointer<MessengerLayer> GetMessengerLayer() const { return common::ManagedPointer(messenger_layer_); }
+
  private:
   // Order matters here for destruction order
   std::unique_ptr<settings::SettingsManager> settings_manager_;
@@ -845,6 +880,7 @@ class DBMain {
   std::unique_ptr<trafficcop::TrafficCop> traffic_cop_;
   std::unique_ptr<NetworkLayer> network_layer_;
   std::unique_ptr<pilot::PilotManager> pilot_;
+  std::unique_ptr<MessengerLayer> messenger_layer_;
 };
 
 }  // namespace terrier
