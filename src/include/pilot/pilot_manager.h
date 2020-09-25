@@ -1,6 +1,14 @@
 #pragma once
 
+
 #include <thread>  //NOLINT
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <netinet/in.h>
+
+#include "loggers/network_logger.h"
 
 namespace terrier::pilot {
 
@@ -88,7 +96,6 @@ class PilotManager {
 
       // The child process terminated
       // TODO(ricky): Do we care why???
-      ClosePipes();
 
       // Restart the pilot if the main database is still running
       if(!shut_down_) {
@@ -96,8 +103,6 @@ class PilotManager {
       }
     }
     else {
-      close(fd_from_model_[0]);
-      close(fd_to_model_[1]);
 
       std::string python3_bin("/usr/local/bin/python3");
       //std::string python3_bin("cat");
@@ -115,16 +120,8 @@ class PilotManager {
     }
   }
 
-  void ClosePipes() {
-    close(fd_from_model_[0]);
-    close(fd_from_model_[1]);
-
-    close(fd_to_model_[0]);
-    close(fd_to_model_[1]);
-  }
  std::thread thd_;
- int fd_to_model_[2];
- int fd_from_model_[2];
+
  pid_t process_pid_;
  bool shut_down_ = false;
 
