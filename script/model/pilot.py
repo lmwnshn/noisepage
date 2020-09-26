@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
-import os
-import sys
-import time
+import zmq
 
-sys.stdout.write(f"\nPilot Model at {os.getpid()}!\n")
-sys.stdout.write("Hello world!\n")
-time.sleep(5)
+context = zmq.Context()
 
-import socket
+#  Socket to talk to server
+print("Connecting to hello world server…")
+socket = context.socket(zmq.REQ)
+socket.connect("inproc://noisepage-pilot")
 
-HOST = "localhost"
-PORT = 15445
+#  Do 10 requests, waiting each time for a response
+for request in range(10):
+    print("Sending request %s …" % request)
+    socket.send(b"Hello")
 
-with socket.socket(socket.AF_NET, socket.SOCK_STREAM) as s:
-    s.connect((HOST, PORT))
-    print("Connected...")
-    data = s.recv(1024)
-
-    print(f"Received: \n %{data}")
+    #  Get the reply.
+    message = socket.recv()
+    print("Received reply %s [ %s ]" % (request, message))
 
 
