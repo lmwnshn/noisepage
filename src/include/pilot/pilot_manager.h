@@ -7,7 +7,7 @@
 
 namespace terrier::pilot {
 // TODO(ricky): read from some config file?
-static constexpr const char *PILOT_ZMQ_PATH = "tcp://noisepage-pilot";
+static constexpr const char *PILOT_ZMQ_PATH = "noisepage-pilot";
 
 /**
  * Inteface for pilot related operations
@@ -17,7 +17,7 @@ class PilotManager {
   PilotManager(std::string model_bin, common::ManagedPointer<messenger::Messenger> messenger)
       : messenger_(messenger),
         conn_id_(
-            messenger_->MakeConnection(messenger::ConnectionDestination(PILOT_ZMQ_PATH), std::nullopt)),
+            messenger_->MakeConnection(messenger::ConnectionDestination::MakeInProc(PILOT_ZMQ_PATH), std::nullopt)),
         thd_(std::thread([this, model_bin] { StartPilot(model_bin); })) {}
 
   /**

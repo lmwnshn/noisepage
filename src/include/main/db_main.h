@@ -391,7 +391,7 @@ class DBMain {
       std::unique_ptr<pilot::PilotManager> pilot_manager = DISABLED;
       if (with_pilot_) {
         TERRIER_ASSERT(use_messenger_, "Pilot requires messenger layer.");
-        std::cout<< "hello ";
+        // FIXME(ricky): no hardcoded model python
         pilot_manager = std::make_unique<pilot::PilotManager>("../../script/model/pilot.py", messenger_layer->GetMessenger());
       }
 

@@ -30,9 +30,10 @@ class ConnectionDestination {
   /** @return The destination in ZMQ format. */
   const char *GetDestination() const { return zmq_address_; }
 
-  explicit ConnectionDestination(const char *zmq_address) : zmq_address_(zmq_address) {}
 
  private:
+  explicit ConnectionDestination(const char *zmq_address) : zmq_address_(zmq_address) {}
+
   /** Construct a new ConnectionDestination with the specified address. */
   const char *zmq_address_;
 };
