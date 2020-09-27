@@ -208,7 +208,9 @@ Messenger::Messenger(common::ManagedPointer<MessengerLogic> messenger_logic) : m
   messenger_running_ = true;
 }
 
-Messenger::~Messenger() = default;
+Messenger::~Messenger() {
+  Terminate();
+}
 
 void Messenger::RunTask() {
   // Run the server loop.
@@ -218,7 +220,7 @@ void Messenger::RunTask() {
 void Messenger::Terminate() {
   messenger_running_ = false;
   zmq_default_socket_->close();
-  zmq_ctx_->shutdown();
+  //zmq_ctx_->shutdown(); // FIXME(ricky): i am getting comp error here
   zmq_ctx_->close();
 }
 
@@ -240,9 +242,10 @@ void Messenger::ServerLoop() {
   common::ManagedPointer<zmq::socket_t> socket{zmq_default_socket_};
 
   while (messenger_running_) {
+    MESSENGER_LOG_INFO("Waiting for messages....");
     ZmqMessage msg = ZmqUtil::RecvMsg(socket);
-
     messenger_logic_->ProcessMessage(msg.identity_, msg.payload_);
+
     messenger::ZmqMessage reply;
     reply.identity_ = msg.identity_;
     reply.payload_ = "pong";
