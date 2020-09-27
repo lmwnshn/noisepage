@@ -119,7 +119,7 @@ class ZmqUtil {
   /** @return The routing ID of the socket. */
   static std::string GetRoutingId(common::ManagedPointer<zmq::socket_t> socket) {
     char buf[MAX_ROUTING_ID_LEN];
-    size_t routing_id_len;
+    size_t routing_id_len = MAX_ROUTING_ID_LEN;
     socket->getsockopt(ZMQ_ROUTING_ID, &buf, &routing_id_len);
     return std::string(buf, routing_id_len);
   }
@@ -217,7 +217,9 @@ void Messenger::RunTask() {
 
 void Messenger::Terminate() {
   messenger_running_ = false;
-  // TODO(WAN): zmq cleanup? or is that all handled with RAII?
+  zmq_default_socket_->close();
+  zmq_ctx_->shutdown();
+  zmq_ctx_->close();
 }
 
 void Messenger::ListenForConnection(const ConnectionDestination &target) {

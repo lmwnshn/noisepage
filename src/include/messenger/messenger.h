@@ -24,19 +24,23 @@ class ConnectionDestination;
 /** ConnectionId is an abstraction around establishing connections. */
 class ConnectionId {
  public:
-  /** An explicit destructor is necessary because of the unique_ptr around a forward-declared type. */
-  ~ConnectionId();
-
- private:
-  friend Messenger;
   /**
    * Create a new ConnectionId that is connected to the specified target.
+   *
+   * This should only be called by the messenger. To enforce this, we do not expose the Messenger's zmq_ctx.
+   *
    * @param zmq_ctx     The ZeroMQ context that holds this connection.
    * @param target      The target to be connected to.
    * @param identity    The name that the connection should have.
    */
   explicit ConnectionId(common::ManagedPointer<zmq::context_t> zmq_ctx, const ConnectionDestination &target,
                         std::string_view identity);
+
+  /** An explicit destructor is necessary because of the unique_ptr around a forward-declared type. */
+  ~ConnectionId();
+
+ private:
+  friend Messenger;
 
   /** The ZMQ socket. */
   std::unique_ptr<zmq::socket_t> socket_;
