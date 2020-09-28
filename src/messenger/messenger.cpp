@@ -118,10 +118,13 @@ class ZmqUtil {
 
   /** @return The routing ID of the socket. */
   static std::string GetRoutingId(common::ManagedPointer<zmq::socket_t> socket) {
-    char buf[MAX_ROUTING_ID_LEN];
-    size_t routing_id_len = MAX_ROUTING_ID_LEN;
-    socket->getsockopt(ZMQ_ROUTING_ID, &buf, &routing_id_len);
-    return std::string(buf, routing_id_len);
+    //char buf[MAX_ROUTING_ID_LEN];
+    //size_t routing_id_len = MAX_ROUTING_ID_LEN;
+    //socket->getsockopt(ZMQ_ROUTING_ID, &buf, &routing_id_len);
+    //return std::string(buf, routing_id_len);
+
+    auto buf = socket->get(zmq::sockopt::routing_id);
+    return buf;
   }
 
   /** @return The next string to be read off the socket. */
@@ -168,7 +171,8 @@ ConnectionId::ConnectionId(common::ManagedPointer<zmq::context_t> zmq_ctx, const
                            std::string_view identity) {
   // Create a new DEALER socket and connect to the server.
   socket_ = std::make_unique<zmq::socket_t>(*zmq_ctx, ZMQ_DEALER);
-  socket_->setsockopt(ZMQ_ROUTING_ID, identity.data(), identity.size());
+  //socket_->setsockopt(ZMQ_ROUTING_ID, identity.data(), identity.size());
+  socket_->set(zmq::sockopt::routing_id, identity);
   routing_id_ = ZmqUtil::GetRoutingId(common::ManagedPointer(socket_));
 
   socket_->connect(target.GetDestination());
@@ -188,7 +192,8 @@ Messenger::Messenger(common::ManagedPointer<MessengerLogic> messenger_logic) : m
   zmq_default_socket_ = std::make_unique<zmq::socket_t>(*zmq_ctx_, ZMQ_ROUTER);
   // By default, the ROUTER socket silently discards messages that cannot be routed.
   // By setting ZMQ_ROUTER_MANDATORY, the ROUTER socket errors with EHOSTUNREACH instead.
-  zmq_default_socket_->setsockopt(ZMQ_ROUTER_MANDATORY, 1);
+  // zmq_default_socket_->setsockopt(ZMQ_ROUTER_MANDATORY, 1);
+  zmq_default_socket_->set(zmq::sockopt::router_mandatory, 1);
 
   // Bind the same ZeroMQ socket over the default TCP, IPC, and in-process channels.
   {
@@ -208,9 +213,7 @@ Messenger::Messenger(common::ManagedPointer<MessengerLogic> messenger_logic) : m
   messenger_running_ = true;
 }
 
-Messenger::~Messenger() {
-  Terminate();
-}
+Messenger::~Messenger() { Terminate(); }
 
 void Messenger::RunTask() {
   // Run the server loop.
@@ -220,7 +223,7 @@ void Messenger::RunTask() {
 void Messenger::Terminate() {
   messenger_running_ = false;
   zmq_default_socket_->close();
-  //zmq_ctx_->shutdown(); // FIXME(ricky): i am getting comp error here
+  zmq_ctx_->shutdown();
   zmq_ctx_->close();
 }
 
@@ -242,15 +245,15 @@ void Messenger::ServerLoop() {
   common::ManagedPointer<zmq::socket_t> socket{zmq_default_socket_};
 
   while (messenger_running_) {
-    MESSENGER_LOG_INFO("Waiting for messages....");
+    //MESSENGER_LOG_INFO("Waiting for messages....");
     ZmqMessage msg = ZmqUtil::RecvMsg(socket);
     messenger_logic_->ProcessMessage(msg.identity_, msg.payload_);
 
-    messenger::ZmqMessage reply;
-    reply.identity_ = msg.identity_;
-    reply.payload_ = "pong";
-    ZmqUtil::SendMsg(socket, reply);
-    MESSENGER_LOG_INFO("SEND \"{}\": \"{}\"", reply.identity_, reply.payload_);
+    //messenger::ZmqMessage reply;
+    //reply.identity_ = msg.identity_;
+    //reply.payload_ = "pong";
+    //ZmqUtil::SendMsg(socket, reply);
+    //MESSENGER_LOG_INFO("SEND \"{}\": \"{}\"", reply.identity_, reply.payload_);
   }
 }
 

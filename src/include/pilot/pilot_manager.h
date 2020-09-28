@@ -1,30 +1,37 @@
 #pragma once
 
+#include <filesystem>
 #include "messenger/messenger.h"
+#include "loggers/messenger_logger.h"
 
-namespace  terrier::pilot{
+namespace terrier::pilot {
 class PilotLogic;
 }
 
 namespace terrier::pilot {
 // TODO(ricky): read from some config file?
-static constexpr const char *PILOT_ZMQ_PATH = "/tmp/noisepage-pilot";
+static constexpr const char *PILOT_ZMQ_PATH = "noisepage-pilot.ipc";
 static constexpr const char *PILOT_CONN_ID_NAME = "pilot";
-
+static constexpr const char *PILOT_TCP_HOST = "127.0.0.1";
+static constexpr const int PILOT_TCP_PORT = 15645;
 
 /**
  * Inteface for pilot related operations
  */
 class PilotManager {
  public:
-  PilotManager(std::string && model_bin, const common::ManagedPointer<messenger::Messenger> &messenger);
+  PilotManager(std::string &&model_bin, const common::ManagedPointer<messenger::Messenger> &messenger);
+
+  ~PilotManager() {
+    StopPilot();
+  }
 
   /**
    * Stop the model-pilot daemon
    */
   void StopPilot();
 
-
+  pid_t GetModelPid() const { return py_pid_; }
 
  private:
   /**
@@ -35,11 +42,11 @@ class PilotManager {
    */
   void StartPilot(std::string model_path, bool restart);
 
+  std::string IPCPath() const { return (std::filesystem::current_path() / PILOT_ZMQ_PATH).string(); }
+  std::string TCPPath() const { return fmt::format("{}:{}", PILOT_TCP_HOST, PILOT_TCP_PORT);}
+
   /** Messenger handler **/
   common::ManagedPointer<messenger::Messenger> messenger_;
-
-  /** Logic for messenger **/
-  std::unique_ptr<PilotLogic> logic_;
 
   /** Connection **/
   messenger::ConnectionId conn_id_;
@@ -48,19 +55,9 @@ class PilotManager {
   std::thread thd_;
 
   /** Python model pid **/
-  pid_t py_pid_;
+  pid_t py_pid_ = -1;
 
   /** Bool shutting down **/
   bool shut_down_ = false;
 };
-
-/**
- *
- */
-class PilotLogic : messenger::MessengerLogic {
-  enum Callbacks: uint8_t {NOOP = 'N', PRINT='P'};
-
-  void ProcessMessage(std::string_view sender, std::string_view message);
-};
-
 }  // namespace terrier::pilot

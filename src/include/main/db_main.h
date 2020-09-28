@@ -276,9 +276,7 @@ class DBMain {
 
     ~MessengerLayer() = default;
 
-    common::ManagedPointer<messenger::Messenger> GetMessenger() const {
-      return messenger_owner_->GetMessenger();
-    }
+    common::ManagedPointer<messenger::Messenger> GetMessenger() const { return messenger_owner_->GetMessenger(); }
 
    private:
     std::unique_ptr<messenger::MessengerOwner> messenger_owner_;
@@ -392,7 +390,8 @@ class DBMain {
       if (with_pilot_) {
         TERRIER_ASSERT(use_messenger_, "Pilot requires messenger layer.");
         // FIXME(ricky): no hardcoded model python
-        pilot_manager = std::make_unique<pilot::PilotManager>("../../script/model/pilot.py", messenger_layer->GetMessenger());
+        pilot_manager =
+            std::make_unique<pilot::PilotManager>("../../script/model/pilot.py", messenger_layer->GetMessenger());
       }
 
       db_main->settings_manager_ = std::move(settings_manager);

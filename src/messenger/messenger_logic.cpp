@@ -28,6 +28,10 @@ void MessengerLogic::ProcessMessage(std::string_view sender, std::string_view me
       MESSENGER_LOG_INFO(fmt::format("RECV \"{}\": \"{}\"", sender, payload));
       break;
     }
+    case Callbacks::CONNECTED:{
+      MESSENGER_LOG_INFO("Connected");
+      break;
+    }
   }
 }
 
