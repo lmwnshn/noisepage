@@ -14,7 +14,7 @@
 #include "network/postgres/postgres_protocol_interpreter.h"
 #include "network/terrier_server.h"
 #include "optimizer/statistics/stats_storage.h"
-#include "pilot/pilot_manager.h"
+#include "pilot/model_server.h"
 #include "settings/settings_manager.h"
 #include "settings/settings_param.h"
 #include "storage/garbage_collector_thread.h"
@@ -386,12 +386,12 @@ class DBMain {
       }
       // TODO(ricky)
       // Initialize the Pilot here
-      std::unique_ptr<pilot::PilotManager> pilot_manager = DISABLED;
+      std::unique_ptr<pilot::ModelServerManager> pilot_manager = DISABLED;
       if (with_pilot_) {
         TERRIER_ASSERT(use_messenger_, "Pilot requires messenger layer.");
         // FIXME(ricky): no hardcoded model python
         pilot_manager =
-            std::make_unique<pilot::PilotManager>("../../script/model/pilot.py", messenger_layer->GetMessenger());
+            std::make_unique<pilot::ModelServerManager>("../../script/model/pilot.py", messenger_layer->GetMessenger());
       }
 
       db_main->settings_manager_ = std::move(settings_manager);
@@ -884,7 +884,7 @@ class DBMain {
   std::unique_ptr<ExecutionLayer> execution_layer_;
   std::unique_ptr<trafficcop::TrafficCop> traffic_cop_;
   std::unique_ptr<NetworkLayer> network_layer_;
-  std::unique_ptr<pilot::PilotManager> pilot_;
+  std::unique_ptr<pilot::ModelServerManager> pilot_;
   std::unique_ptr<MessengerLayer> messenger_layer_;
 };
 

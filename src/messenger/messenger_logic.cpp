@@ -20,6 +20,8 @@ void MessengerLogic::ProcessMessage(std::string_view sender, std::string_view me
   // A suggestion for adding additional functions in the future.
   // Write a wrapper for all functions that parse out the remaining payload.
 
+  MESSENGER_LOG_INFO(fmt::format("RECV \"{}\": \"{}\"", sender, payload));
+
   switch (function) {
     case Callbacks::NOOP: {
       break;

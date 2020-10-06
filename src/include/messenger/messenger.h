@@ -106,6 +106,12 @@ class Messenger : public common::DedicatedThreadTask {
    */
   void SendMessage(common::ManagedPointer<ConnectionId> connection_id, std::string message);
 
+  /**
+   * Send a message through the default id,
+   * @param message
+   */
+  void SendMessage(std::string identity, std::string message);
+
  private:
   static constexpr int MESSENGER_PORT = 9022;
   static constexpr const char *MESSENGER_DEFAULT_TCP = "tcp://*:9022";

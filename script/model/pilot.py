@@ -7,25 +7,36 @@ context = zmq.Context()
 
 socket = context.socket(zmq.DEALER)
 socket.setsockopt(zmq.IDENTITY, b"model")
-# socket.connect(f"ipc://{end_point}")
-socket.connect(f"tcp://{end_point}")
+socket.connect(f"ipc://{end_point}")
 print(f"Python model connected at {end_point}")
 
 # I am born
 socket.send(b"", flags=zmq.SNDMORE)
 socket.send(b"CConnected")
 
-# Loop until quit
-while(1):
-    message = socket.recv()
-    if message.decode("ascii") == "Quit":
-        print("Asked to quit")
-        socket.send(b"", flags=zmq.SNDMORE)
-        socket.send(b"PQuit")
-        break
-    else:
-        socket.send(b"", flags=zmq.SNDMORE)
-        socket.send(b"PHeatbeat")
+import atexit
+def cleanup_zmq():
+    socket.close()
+    context.destroy()
+atexit.register(cleanup_zmq)
 
+# Loop until quit
+def runLoop():
+    while(1):
+        message = socket.recv()
+        message = message.decode("ascii")
+        if message == "Quit":
+            print("Asked to quit")
+            return
+        elif message == "": # Empty delimiter
+            continue
+        else:
+            print(message)
+            socket.send(b"", flags=zmq.SNDMORE)
+            socket.send(b"PHeatbeat")
+
+
+runLoop()
+print("Model shutting down")
 
 

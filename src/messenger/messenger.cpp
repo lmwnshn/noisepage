@@ -130,11 +130,15 @@ class ZmqUtil {
   /** @return The next string to be read off the socket. */
   static std::string Recv(common::ManagedPointer<zmq::socket_t> socket, zmq::recv_flags flags) {
     zmq::message_t message;
+    try {
     auto received = socket->recv(message, flags);
-    if (!received.has_value()) {
-      throw MESSENGER_EXCEPTION(fmt::format("Unable to receive on socket: {}", ZmqUtil::GetRoutingId(socket)));
+      if (!received.has_value()) {
+        throw MESSENGER_EXCEPTION(fmt::format("Unable to receive on socket: {}", ZmqUtil::GetRoutingId(socket)));
+      }
+      return std::string(static_cast<char *>(message.data()), received.value());
+    } catch (const std::exception& e) {
+      return "ERRORED";
     }
-    return std::string(static_cast<char *>(message.data()), received.value());
   }
 
   /** @return The next ZmqMessage (identity and payload) read off the socket. */
@@ -241,19 +245,18 @@ void Messenger::SendMessage(common::ManagedPointer<ConnectionId> connection_id, 
   ZmqUtil::SendMsg(common::ManagedPointer(connection_id->socket_), msg);
 }
 
+void Messenger::SendMessage(std::string identity, std::string message) {
+  ZmqMessage msg{identity, message};
+  ZmqUtil::SendMsg(common::ManagedPointer(zmq_default_socket_), msg);
+}
+
 void Messenger::ServerLoop() {
   common::ManagedPointer<zmq::socket_t> socket{zmq_default_socket_};
 
   while (messenger_running_) {
-    //MESSENGER_LOG_INFO("Waiting for messages....");
+    MESSENGER_LOG_INFO("Waiting for messages....");
     ZmqMessage msg = ZmqUtil::RecvMsg(socket);
     messenger_logic_->ProcessMessage(msg.identity_, msg.payload_);
-
-    //messenger::ZmqMessage reply;
-    //reply.identity_ = msg.identity_;
-    //reply.payload_ = "pong";
-    //ZmqUtil::SendMsg(socket, reply);
-    //MESSENGER_LOG_INFO("SEND \"{}\": \"{}\"", reply.identity_, reply.payload_);
   }
 }
 

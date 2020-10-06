@@ -10,26 +10,25 @@ class PilotLogic;
 
 namespace terrier::pilot {
 // TODO(ricky): read from some config file?
-static constexpr const char *PILOT_ZMQ_PATH = "noisepage-pilot.ipc";
-static constexpr const char *PILOT_CONN_ID_NAME = "pilot";
-static constexpr const char *PILOT_TCP_HOST = "127.0.0.1";
-static constexpr const int PILOT_TCP_PORT = 15645;
+static constexpr const char *MODEL_CONN_ID_NAME = "model";
+static constexpr const char *MODEL_ZMQ_PATH = "/tmp/noisepage-ipc0";
+static constexpr const char *MODEL_TCP_HOST = "127.0.0.1";
+static constexpr const int MODEL_TCP_PORT = 15645;
 
 /**
  * Inteface for pilot related operations
  */
-class PilotManager {
+class ModelServerManager {
  public:
-  PilotManager(std::string &&model_bin, const common::ManagedPointer<messenger::Messenger> &messenger);
+  ModelServerManager(std::string &&model_bin, const common::ManagedPointer<messenger::Messenger> &messenger);
 
-  ~PilotManager() {
-    StopPilot();
+  ~ModelServerManager() { StopModelServer();
   }
 
   /**
    * Stop the model-pilot daemon
    */
-  void StopPilot();
+  void StopModelServer();
 
   pid_t GetModelPid() const { return py_pid_; }
 
@@ -40,16 +39,16 @@ class PilotManager {
    * 2. Prepare arguments and forks to initialize a python daemon
    * 3. Record the pid
    */
-  void StartPilot(std::string model_path, bool restart);
+  void StartModelServer(std::string model_path);
 
-  std::string IPCPath() const { return (std::filesystem::current_path() / PILOT_ZMQ_PATH).string(); }
-  std::string TCPPath() const { return fmt::format("{}:{}", PILOT_TCP_HOST, PILOT_TCP_PORT);}
+  std::string IPCPath() const { return MODEL_ZMQ_PATH; }
+  std::string TCPPath() const { return fmt::format("{}:{}", MODEL_TCP_HOST, MODEL_TCP_PORT);}
 
   /** Messenger handler **/
   common::ManagedPointer<messenger::Messenger> messenger_;
 
   /** Connection **/
-  messenger::ConnectionId conn_id_;
+  //messenger::ConnectionId conn_id_;
 
   /** Thread the pilot manager runs in **/
   std::thread thd_;
