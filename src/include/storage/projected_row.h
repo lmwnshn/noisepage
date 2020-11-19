@@ -8,8 +8,14 @@
 #include "storage/storage_util.h"
 
 namespace noisepage::catalog {
+
 class Catalog;
 class DatabaseCatalog;
+
+namespace postgres {
+class PgClass;
+}  // namespace postgres
+
 }  // namespace noisepage::catalog
 
 namespace noisepage::execution::sql {
@@ -266,6 +272,7 @@ class ProjectedRowInitializer {
  private:
   friend class catalog::Catalog;                  // access to the PRI default constructor
   friend class catalog::DatabaseCatalog;          // access to the PRI default constructor
+  friend class catalog::postgres::PgClass;        // access to the PRI default constructor
   friend class execution::sql::StorageInterface;  // access to the PRI default constructor
   friend class WriteAheadLoggingTests;
   friend class AbstractLogProvider;
