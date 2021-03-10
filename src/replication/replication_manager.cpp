@@ -6,10 +6,14 @@
 
 #include "common/error/exception.h"
 #include "common/json.h"
+#include "execution/compiler/executable_query.h"
 #include "loggers/replication_logger.h"
 #include "network/network_io_utils.h"
+#include "network/network_util.h"
+#include "planner/plannodes/output_schema.h"
 #include "storage/recovery/replication_log_provider.h"
 #include "storage/write_ahead_log/log_io.h"
+#include "util/query_exec_util.h"
 
 namespace {
 
@@ -59,6 +63,8 @@ ReplicationManager::ReplicationManager(
                                   [this](common::ManagedPointer<messenger::Messenger> messenger,
                                          const messenger::ZmqMessage &msg) { EventLoop(messenger, msg); });
   BuildReplicaList(replication_hosts_path);
+
+  replication_logger->set_level(spdlog::level::trace);
 }
 
 const char *ReplicationManager::key_message_type = "message_type";
@@ -128,15 +134,16 @@ void ReplicationManager::ReplicaAck(const std::string &replica_name, const uint6
   ReplicaSendInternal(replica_name, MessageType::ACK, common::json{}, callback_id, block);
 }
 
-void ReplicationManager::ReplicaSend(const std::string &replica_name, common::json msg, const bool block) {
-  ReplicaSendInternal(replica_name, MessageType::REPLICATE_BUFFER, std::move(msg),
+void ReplicationManager::ReplicaSend(const std::string &replica_name, MessageType msg_type, common::json msg,
+                                     const bool block) {
+  ReplicaSendInternal(replica_name, msg_type, std::move(msg),
                       static_cast<uint64_t>(messenger::Messenger::BuiltinCallback::NOOP), block);
 }
 
 void ReplicationManager::ReplicaSendInternal(const std::string &replica_name, const MessageType msg_type,
                                              common::json msg_json, const uint64_t remote_cb_id, const bool block) {
   if (!replication_enabled_) {
-    REPLICATION_LOG_WARN(fmt::format("Skipping send -> {} as replication is disabled."));
+    REPLICATION_LOG_WARN(fmt::format("Skipping send -> {} as replication is disabled.", replica_name));
     return;
   }
 
@@ -269,7 +276,7 @@ void PrimaryReplicationManager::ReplicateBuffer(storage::BufferedLogWriter *buff
 
   for (const auto &replica : replicas_) {
     // TODO(WAN): many things break when block is flipped from true to false.
-    ReplicaSend(replica.first, msg.ToJson(), true);
+    ReplicaSend(replica.first, ReplicationManager::MessageType::REPLICATE_BUFFER, msg.ToJson(), true);
   }
 
   if (buffer->MarkSerialized()) {
@@ -324,12 +331,32 @@ void ReplicaReplicationManager::EventLoop(common::ManagedPointer<messenger::Mess
       HandleReplicatedBuffer(msg);
       break;
     }
+    case MessageType::QUERY_TEXT: {
+      const network::QueryType query_type = json["query_type"];
+      const std::string query = json["query"];
+      REPLICATION_LOG_INFO("Query type {}, text: {}", query_type, query);
+      query_exec_util_->BeginTransaction();
+      // TODO(WAN): Do something about these nullptrs
+      if (network::NetworkUtil::DDLQueryType(query_type)) {
+        query_exec_util_->ExecuteDDL(query);
+      } else if (network::NetworkUtil::DMLQueryType(query_type)) {
+        query_exec_util_->ExecuteDML(query, nullptr, nullptr, nullptr, nullptr);
+      } else {
+        REPLICATION_LOG_INFO("Unknown query type: {}", query_type);
+      }
+      query_exec_util_->EndTransaction(false);
+      break;
+    }
     default: {
       // Delegate to the common ReplicationManager event loop.
       ReplicationManager::EventLoop(messenger, msg);
       break;
     }
   }
+}
+
+void ReplicaReplicationManager::SetQueryExecUtil(std::unique_ptr<util::QueryExecUtil> query_exec_util) {
+  query_exec_util_ = std::move(query_exec_util);
 }
 
 }  // namespace noisepage::replication

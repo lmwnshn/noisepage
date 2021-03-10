@@ -16,6 +16,7 @@
 #include "network/noisepage_server.h"
 #include "network/postgres/postgres_command_factory.h"
 #include "network/postgres/postgres_protocol_interpreter.h"
+#include "optimizer/cost_model/trivial_cost_model.h"
 #include "optimizer/statistics/stats_storage.h"
 #include "replication/replication_manager.h"
 #include "self_driving/model_server/model_server_manager.h"
@@ -427,7 +428,7 @@ class DBMain {
         auto rep_manager_ptr = network_identity_ == "primary"
                                    ? common::ManagedPointer(replication_manager)
                                          .CastManagedPointerTo<replication::PrimaryReplicationManager>()
-                                   : nullptr;
+                                   : DISABLED;
         log_manager = std::make_unique<storage::LogManager>(
             wal_file_path_, wal_num_buffers_, std::chrono::microseconds{wal_serialization_interval_},
             std::chrono::microseconds{wal_persist_interval_}, wal_persist_threshold_,
@@ -527,18 +528,6 @@ class DBMain {
             std::chrono::microseconds{forecast_train_interval_}, pilot_planning_);
       }
 
-      // TODO(WAN): I now consider this hacky.
-      //  The original motivation is that you do NOT want the catalog's bootstrapping transaction to be replicated
-      //  to the replicas, which will perform their own bootstrapping (and therefore the bootstrapping would conflict).
-      //  However, with the addition of the RetentionPolicy enum, we really should be able to just say that the catalog
-      //  bootstrap has a RetentionPolicy::LOCAL so that it still gets written to the local WAL but not sent to the
-      //  replicas. Unfortuantely, the current implementation of retention policies is a little hacky and it is not
-      //  currently clear to me how we can fix that, so in the interests of getting some basic replication merged
-      //  we are simply disabling replication until the bootstrap is complete.
-      if (use_replication_) {
-        replication_manager->EnableReplication();
-      }
-
       db_main->settings_manager_ = std::move(settings_manager);
       db_main->metrics_manager_ = std::move(metrics_manager);
       db_main->metrics_thread_ = std::move(metrics_thread);
@@ -587,6 +576,14 @@ class DBMain {
               util::QueryExecUtil::ConstructThreadLocal(common::ManagedPointer(db_main->query_exec_util_)));
           db_main->pilot_->SetQueryInternalThread(common::ManagedPointer(db_main->query_internal_thread_));
         }
+
+        if (db_main->replication_manager_->IsReplica()) {
+          auto qeu = util::QueryExecUtil::ConstructThreadLocal(common::ManagedPointer(db_main->query_exec_util_));
+          qeu->SetCostModelFunction([]() { return std::make_unique<optimizer::TrivialCostModel>(); });
+          db_main->replication_manager_->GetAsReplica()->SetQueryExecUtil(std::move(qeu));
+        }
+      } else {
+        exit(1);
       }
 
       return db_main;

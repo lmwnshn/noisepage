@@ -239,6 +239,12 @@ class TrafficCop {
    */
   bool UseQueryCache() const { return use_query_cache_; }
 
+  /**
+   * Replicate the query text in the provided portal.
+   * @param portal The portal whose query text should be replicated.
+   */
+  void ReplicateQueryText(const common::ManagedPointer<network::Portal> portal);
+
  private:
   common::ManagedPointer<transaction::TransactionManager> txn_manager_;
   common::ManagedPointer<catalog::Catalog> catalog_;

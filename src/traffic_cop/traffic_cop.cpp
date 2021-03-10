@@ -30,6 +30,7 @@
 #include "parser/variable_set_statement.h"
 #include "parser/variable_show_statement.h"
 #include "planner/plannodes/abstract_plan_node.h"
+#include "replication/replication_manager.h"
 #include "settings/settings_manager.h"
 #include "storage/recovery/replication_log_provider.h"
 #include "traffic_cop/traffic_cop_defs.h"
@@ -524,6 +525,16 @@ bool TrafficCop::DropTempNamespace(const catalog::db_oid_t db_oid, const catalog
     txn_manager_->Abort(txn);
   }
   return result;
+}
+
+void TrafficCop::ReplicateQueryText(const common::ManagedPointer<network::Portal> portal) {
+  for (const auto &it : replication_manager_->GetReplicaList()) {
+    common::json json;
+    json["query_type"] = portal->GetStatement()->GetQueryType();
+    json["query"] = portal->GetStatement()->GetQueryText();
+    replication_manager_->ReplicaSend(it.first, replication::ReplicationManager::MessageType::QUERY_TEXT,
+                                      std::move(json), false);
+  }
 }
 
 }  // namespace noisepage::trafficcop

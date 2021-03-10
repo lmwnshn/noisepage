@@ -29,6 +29,10 @@ static void ExecutePortal(const common::ManagedPointer<network::ConnectionContex
   const auto query_type = portal->GetStatement()->GetQueryType();
   const auto physical_plan = portal->OptimizeResult()->GetPlanNode();
 
+  // TODO(WAN): Actually, this is interesting. Do you replicate stuff that got aborted before it even ran, e.g.,
+  //  one of the CREATE DATABASE cannot run inside a transaction block errors below. Or not?
+  t_cop->ReplicateQueryText(portal);
+
   // This logic relies on ordering of values in the enum's definition and is documented there as well.
   if (NetworkUtil::DMLQueryType(query_type)) {
     // DML query to put through codegen

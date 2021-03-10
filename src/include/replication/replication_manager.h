@@ -21,6 +21,10 @@ class BufferedLogWriter;
 class ReplicationLogProvider;
 }  // namespace noisepage::storage
 
+namespace noisepage::util {
+class QueryExecUtil;
+}  // namespace noisepage::util
+
 namespace noisepage::replication {
 
 class ReplicationManager;
@@ -117,10 +121,11 @@ class ReplicationManager {
  public:
   /** The type of message that is being sent. */
   enum class MessageType : uint8_t {
-    RESERVED = 0,     ///< Reserved.
-    ACK,              ///< Acknowledgement of received message.
-    HEARTBEAT,        ///< Replica heartbeat.
-    REPLICATE_BUFFER  ///< Buffer received from the log manager that should be replicated.
+    RESERVED = 0,      ///< Reserved.
+    ACK,               ///< Acknowledgement of received message.
+    HEARTBEAT,         ///< Replica heartbeat.
+    REPLICATE_BUFFER,  ///< Buffer received from the log manager that should be replicated.
+    QUERY_TEXT         ///< Query text that was played on the primary.
   };
   /** Milliseconds between replication heartbeats before a replica is declared dead. */
   static constexpr uint64_t REPLICATION_CARDIAC_ARREST_MS = 5000;
@@ -172,10 +177,14 @@ class ReplicationManager {
    * Send a message to the specified replica.
    *
    * @param replica_name    The replica to send to.
+   * @param msg_type        The type of message that is being sent.
    * @param msg             The message that is being sent.
    * @param block           True if the call should block until an acknowledgement is received. False otherwise.
    */
-  void ReplicaSend(const std::string &replica_name, common::json msg, bool block);
+  void ReplicaSend(const std::string &replica_name, MessageType msg_type, common::json msg, bool block);
+
+  /** @return All the replicas, including those that may have been dead. */
+  const std::unordered_map<std::string, Replica> &GetReplicaList() const { return replicas_; }
 
  protected:
   /**
@@ -330,6 +339,8 @@ class ReplicaReplicationManager final : public ReplicationManager {
     return common::ManagedPointer(provider_);
   }
 
+  void SetQueryExecUtil(std::unique_ptr<util::QueryExecUtil> query_exec_util);
+
  protected:
   /** The main event loop that all nodes run. This handles receiving messages. */
   void EventLoop(common::ManagedPointer<messenger::Messenger> messenger, const messenger::ZmqMessage &msg) override;
@@ -337,6 +348,7 @@ class ReplicaReplicationManager final : public ReplicationManager {
   /** Apply the buffer if it is the "next" buffer. Otherwise enqueue it, see received_message_queue_ documentation. */
   void HandleReplicatedBuffer(const messenger::ZmqMessage &msg);
 
+  std::unique_ptr<util::QueryExecUtil> query_exec_util_;       ///< Query execution utility.
   std::unique_ptr<storage::ReplicationLogProvider> provider_;  ///< The replicated buffers provided by the primary.
   uint64_t last_record_received_id_ = 0;                       ///< The ID of the last record to be received.
 
