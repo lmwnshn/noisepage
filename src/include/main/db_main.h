@@ -10,6 +10,7 @@
 #include "common/dedicated_thread_registry.h"
 #include "common/managed_pointer.h"
 #include "messenger/messenger.h"
+#include "metrics/metrics_defs.h"
 #include "metrics/metrics_thread.h"
 #include "network/connection_handle_factory.h"
 #include "network/noisepage_server.h"
@@ -27,6 +28,8 @@
 #include "traffic_cop/traffic_cop.h"
 #include "transaction/deferred_action_manager.h"
 #include "transaction/transaction_manager.h"
+#include "util/query_exec_util.h"
+#include "util/query_internal_thread.h"
 
 namespace noisepage {
 
@@ -59,6 +62,19 @@ class DBMain {
    * It will block until server shuts down.
    */
   void Run();
+
+  /**
+   * Function loads a startup.sql file specified by the startup_ddl_path
+   * settings parameter. The file is treated as a file of DDL commands
+   * that are then executed.
+   *
+   * Function assumes the following:
+   * - Each SQL command is a DDL statement
+   * - Each line is either blank, a comment, or a SQL command to run
+   * - A comment is any line that starts with '--'
+   * - A SQL command must fit on a single line
+   */
+  void TryLoadStartupDDL();
 
   /**
    * Shuts down the server.
@@ -544,6 +560,35 @@ class DBMain {
       db_main->messenger_layer_ = std::move(messenger_layer);
       db_main->replication_manager_ = std::move(replication_manager);
 
+      if (db_main->txn_layer_ && use_catalog_ && use_settings_manager_ && use_metrics_ && use_stats_storage_) {
+        auto *bootstrap_txn = db_main->txn_layer_->GetTransactionManager()->BeginTransaction();
+        auto db_oid = db_main->catalog_layer_->GetCatalog()->GetDatabaseOid(common::ManagedPointer(bootstrap_txn),
+                                                                            catalog::DEFAULT_DATABASE);
+        db_main->txn_layer_->GetTransactionManager()->Commit(bootstrap_txn, transaction::TransactionUtil::EmptyCallback,
+                                                             nullptr);
+
+        // Create the base QueryExecUtil
+        db_main->query_exec_util_ = std::make_unique<util::QueryExecUtil>(
+            db_oid, db_main->txn_layer_->GetTransactionManager(), db_main->catalog_layer_->GetCatalog(),
+            common::ManagedPointer(db_main->settings_manager_), common::ManagedPointer(db_main->stats_storage_),
+            optimizer_timeout_);
+
+        // Startup the internal query thread
+        db_main->query_internal_thread_ = std::make_unique<util::QueryInternalThread>(
+            util::QueryExecUtil::ConstructThreadLocal(common::ManagedPointer(db_main->query_exec_util_)));
+
+        // Hand out and attach references to MetricsManager and Pilot
+        db_main->metrics_manager_->SetQueryExecUtil(
+            util::QueryExecUtil::ConstructThreadLocal(common::ManagedPointer(db_main->query_exec_util_)));
+        db_main->metrics_manager_->SetQueryInternalThread(common::ManagedPointer(db_main->query_internal_thread_));
+
+        if (use_pilot_thread_) {
+          db_main->pilot_->SetQueryExecUtil(
+              util::QueryExecUtil::ConstructThreadLocal(common::ManagedPointer(db_main->query_exec_util_)));
+          db_main->pilot_->SetQueryInternalThread(common::ManagedPointer(db_main->query_internal_thread_));
+        }
+      }
+
       return db_main;
     }
 
@@ -873,6 +918,7 @@ class DBMain {
     uint64_t block_store_size_ = 1e5;
     uint64_t block_store_reuse_ = 1e3;
     uint64_t optimizer_timeout_ = 5000;
+    uint64_t forecast_sample_limit_ = 5;
 
     std::string wal_file_path_ = "wal.log";
     std::string model_save_path_;
@@ -901,6 +947,7 @@ class DBMain {
     bool gc_metrics_ = false;
     bool bind_command_metrics_ = false;
     bool execute_command_metrics_ = false;
+    metrics::MetricsOutput query_trace_metrics_output_ = metrics::MetricsOutput::CSV;
 
     int32_t wal_serialization_interval_ = 100;
     int32_t wal_persist_interval_ = 100;
@@ -986,6 +1033,9 @@ class DBMain {
       bytecode_handlers_path_ = settings_manager->GetString(settings::Param::bytecode_handlers_path);
 
       query_trace_metrics_ = settings_manager->GetBool(settings::Param::query_trace_metrics_enable);
+      query_trace_metrics_output_ =
+          static_cast<metrics::MetricsOutput>(settings_manager->GetInt(settings::Param::query_trace_metrics_output));
+      forecast_sample_limit_ = settings_manager->GetInt(settings::Param::forecast_sample_limit);
       pipeline_metrics_ = settings_manager->GetBool(settings::Param::pipeline_metrics_enable);
       pipeline_metrics_sample_rate_ = settings_manager->GetInt(settings::Param::pipeline_metrics_sample_rate);
       transaction_metrics_ = settings_manager->GetBool(settings::Param::transaction_metrics_enable);
@@ -1015,6 +1065,10 @@ class DBMain {
                                            pipeline_metrics_sample_rate_);
 
       if (query_trace_metrics_) metrics_manager->EnableMetric(metrics::MetricsComponent::QUERY_TRACE);
+      metrics::QueryTraceMetricRawData::query_param_sample = forecast_sample_limit_;
+      metrics::QueryTraceMetricRawData::query_segment_interval = workload_forecast_interval_;
+      metrics_manager->SetMetricOutput(metrics::MetricsComponent::QUERY_TRACE, query_trace_metrics_output_);
+
       if (pipeline_metrics_) metrics_manager->EnableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE);
       if (transaction_metrics_) metrics_manager->EnableMetric(metrics::MetricsComponent::TRANSACTION);
       if (logging_metrics_) metrics_manager->EnableMetric(metrics::MetricsComponent::LOGGING);
@@ -1137,6 +1191,16 @@ class DBMain {
     return common::ManagedPointer(model_server_manager_);
   }
 
+  /** @return Standard QueryExecUtil from which other utils can be derived from */
+  common::ManagedPointer<util::QueryExecUtil> GetQueryExecUtil() const {
+    return common::ManagedPointer(query_exec_util_);
+  }
+
+  /** @return ManagedPointer to internal query execution thread */
+  common::ManagedPointer<util::QueryInternalThread> GetQueryInternalThread() const {
+    return common::ManagedPointer(query_internal_thread_);
+  }
+
  private:
   // Order matters here for destruction order
   std::unique_ptr<settings::SettingsManager> settings_manager_;
@@ -1154,6 +1218,8 @@ class DBMain {
   std::unique_ptr<ExecutionLayer> execution_layer_;
   std::unique_ptr<trafficcop::TrafficCop> traffic_cop_;
   std::unique_ptr<NetworkLayer> network_layer_;
+  std::unique_ptr<util::QueryExecUtil> query_exec_util_;
+  std::unique_ptr<util::QueryInternalThread> query_internal_thread_;
   std::unique_ptr<MessengerLayer> messenger_layer_;
   std::unique_ptr<replication::ReplicationManager> replication_manager_;  // Depends on messenger.
   std::unique_ptr<storage::RecoveryManager> recovery_manager_;            // Depends on replication manager.

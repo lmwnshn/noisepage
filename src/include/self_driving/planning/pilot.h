@@ -14,6 +14,7 @@
 #include "common/macros.h"
 #include "common/managed_pointer.h"
 #include "execution/exec_defs.h"
+#include "metrics/query_trace_metric.h"
 #include "self_driving/forecasting/workload_forecast.h"
 #include "self_driving/planning/action/action_defs.h"
 
@@ -45,6 +46,11 @@ class SettingsManager;
 namespace transaction {
 class TransactionManager;
 }
+
+namespace util {
+class QueryExecUtil;
+class QueryInternalThread;
+}  // namespace util
 
 }  // namespace noisepage
 
@@ -81,6 +87,9 @@ class Pilot {
         common::ManagedPointer<optimizer::StatsStorage> stats_storage,
         common::ManagedPointer<transaction::TransactionManager> txn_manager, uint64_t workload_forecast_interval);
 
+  /** @return the current planning iteration */
+  static uint64_t GetCurrentPlanIteration() { return Pilot::planning_iteration; }
+
   /**
    * Get model save path
    * @return save path of the mini model
@@ -92,6 +101,32 @@ class Pilot {
    * @return pointer to model server manager
    */
   common::ManagedPointer<modelserver::ModelServerManager> GetModelServerManager() { return model_server_manager_; }
+
+  /**
+   * Retrieve workload metadata
+   * @param iteration current iteration
+   * @param out_metadata Query Metadata from metrics
+   * @param out_params Query parameters fro mmetrics
+   * @return pair where first is metadata and second is flag of success
+   */
+  std::pair<selfdriving::WorkloadMetadata, bool> RetrieveWorkloadMetadata(
+      uint64_t iteration,
+      const std::unordered_map<execution::query_id_t, metrics::QueryTraceMetadata::QueryMetadata> &out_metadata,
+      const std::unordered_map<execution::query_id_t, std::vector<std::string>> &out_params);
+
+  /**
+   * Record the workload forecast to the internal tables
+   * @param iteration current iteration
+   * @param prediction Forecast model prediction
+   * @param metadata Metadata about the queries
+   */
+  void RecordWorkloadForecastPrediction(uint64_t iteration, const selfdriving::WorkloadForecastPrediction &prediction,
+                                        const WorkloadMetadata &metadata);
+
+  /**
+   * Loads workload forecast information
+   */
+  void LoadWorkloadForecast();
 
   /**
    * Performs Pilot Logic, load and execute the predicted queries while extracting pipeline features
@@ -108,6 +143,20 @@ class Pilot {
    * @param best_action_seq pointer to the vector to be filled with the sequence of best actions to take at current time
    */
   void ActionSearch(std::vector<std::pair<const std::string, catalog::db_oid_t>> *best_action_seq);
+
+  /**
+   * Sets the query execution utility for the pilot to use
+   * @param query_exec_util to use
+   */
+  void SetQueryExecUtil(std::unique_ptr<util::QueryExecUtil> query_exec_util);
+
+  /**
+   * Sets the internal query thread for the pilot to submit jobs to
+   * @param thread to use
+   */
+  void SetQueryInternalThread(common::ManagedPointer<util::QueryInternalThread> thread) {
+    query_internal_thread_ = thread;
+  }
 
  private:
   /**
@@ -140,9 +189,12 @@ class Pilot {
   common::ManagedPointer<settings::SettingsManager> settings_manager_;
   common::ManagedPointer<optimizer::StatsStorage> stats_storage_;
   common::ManagedPointer<transaction::TransactionManager> txn_manager_;
+  std::unique_ptr<util::QueryExecUtil> query_exec_util_;
+  common::ManagedPointer<util::QueryInternalThread> query_internal_thread_;
   uint64_t workload_forecast_interval_{10000000};
   uint64_t action_planning_horizon_{5};
   uint64_t simulation_number_{20};
+  static uint64_t planning_iteration;
   friend class noisepage::selfdriving::PilotUtil;
   friend class noisepage::selfdriving::pilot::MonteCarloTreeSearch;
 };
