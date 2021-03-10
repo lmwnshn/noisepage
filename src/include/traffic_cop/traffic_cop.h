@@ -93,12 +93,6 @@ class TrafficCop {
   virtual ~TrafficCop() = default;
 
   /**
-   * Hands a buffer of logs to replication
-   * @param buffer buffer containing logs
-   */
-  void HandBufferToReplication(std::unique_ptr<network::ReadBuffer> buffer);
-
-  /**
    * Create a temporary namespace for a connection
    * @param connection_id the unique connection ID to use for the namespace name
    * @param database_name the name of the database the connection is accessing
