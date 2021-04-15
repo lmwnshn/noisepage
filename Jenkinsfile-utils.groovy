@@ -276,6 +276,79 @@ void stageModeling() {
     stagePost()
 }
 
+void stagePilot() {
+    stagePre()
+    installPackages()
+
+    // Build the noisepage DBMS and the execution_runners binary in release mode for efficient data generation.
+    buildNoisePage([buildCommand:'ninja noisepage', cmake:
+        '-DCMAKE_BUILD_TYPE=Release -DNOISEPAGE_UNITY_BUILD=ON -DNOISEPAGE_USE_JEMALLOC=ON'
+    ])
+
+    buildNoisePageTarget("execution_runners")
+    // The parameters to the execution_runners target are arbitrarily picked to complete tests within 10 minutes while
+    // still exercising all OUs and generating a reasonable amount of training data.
+    //
+    // Specifically, the parameters chosen are:
+    // - execution_runner_rows_limit=100, which sets the max number of rows/tuples processed to be 100 (small table).
+    // - rerun=0, which skips rerun since we are not testing benchmark performance here.
+    // - warm_num=1, which also tests the warm up phase for the execution_runners.
+    sh script :'''
+    cd build/bin
+    ../benchmark/execution_runners --execution_runner_rows_limit=100 --rerun=0 --warm_num=1
+    ''', label: 'OU model training data generation'
+
+    // This generates execution_SEQ(numbers).csv files in the build/bin directory.
+
+    sh script:'''
+    cd build/bin
+    mkdir ou_runner_input
+    mkdir ou_runner_model_results
+    mkdir ou_runner_trained_model
+    ''', label: 'Create folders for OU model training.'
+
+    sh script:'''
+    cd build/bin
+    mv *SEQ*.csv ou_runner_input
+    ''', label: 'Move OU model training data to the ou_runner_input folder.'
+
+    sh script:'''
+    cd build/bin
+    PYTHONPATH=../.. python3 -m script.self_driving.modeling.ou_model_trainer --input_path=./ou_runner_input --model_results_path=./ou_runner_model_results --save_path=./ou_runner_trained_model
+    ''', label: 'Train OU models.'
+
+    sh script :'''
+    cd build/bin
+    PYTHONPATH=../.. python3 -m script.self_driving.forecasting.forecaster_standalone --generate_data --oltpbench_tpcc_drop_indexes_secondary
+    ''', label: 'Create and load OLTPBench database, drop secondary TPCC indexes, execute OLTPBench.'
+
+    sh script: '''
+    cd build/bin
+    PYTHONPATH=../.. ./noisepage --use_pilot_thread --model_server_enable --messenger_enable --model_save_path ./ou_runner_trained_model/ou_model_map.pickle --model_server_path ../../script/self_driving/model_server.py
+    ''', label: 'Start the NoisePage DBMS with the Pilot and ModelServer.'
+
+    sh script :'''
+    cd build/bin
+    PYTHONPATH=../.. python3 -m script.self_driving.forecasting.forecaster_standalone --generate_data --no_oltpbench_start_db --no_oltpbench_record --no_oltpbench_execute --oltpbench_tpcc_drop_indexes_secondary
+    ''', label: 'Create and load OLTPBench.'
+
+    sh script :'''
+    cd build/bin
+    PYTHONPATH=../.. python3 -m script.testing.run_sql 'SET pilot_planning="true";'
+    ''', label: 'Enable pilot planning.'
+
+    // We need `coverage combine` because coverage files are generated separately for each test and then moved into the
+    // the build root by `run-test.sh`
+    sh script :'''
+    cd build
+    coverage combine
+    ''', label: 'Combine Python code coverage.'
+
+    uploadCoverage()
+
+    stagePost()
+}
+
 void stageArchive() {
     archiveArtifacts(artifacts: 'build/Testing/**/*.xml', fingerprint: true)
     xunit reduceLog: false, tools: [CTest(deleteOutputFiles: false, failIfNotNew: false, pattern: 'build/Testing/**/*.xml', skipNoTestFiles: false, stopProcessingIfError: false)]

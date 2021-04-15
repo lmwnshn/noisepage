@@ -20,6 +20,7 @@ TODO:
 import argparse
 import pickle
 
+from ...testing.oltpbench.utils_sql import tpcc_drop_indexes_secondary
 from ...testing.self_driving.constants import (DEFAULT_ITER_NUM,
                                                DEFAULT_QUERY_TRACE_FILE,
                                                DEFAULT_TPCC_WEIGHTS,
@@ -73,6 +74,41 @@ argp.add_argument(
     help="Number of iterations the DEFAULT_WORKLOAD_PATTERN should be run")
 argp.add_argument("--trace_file", default=DEFAULT_QUERY_TRACE_FILE,
                   help="Path to the query trace file", metavar="FILE")
+argp.add_argument(
+    "--no_oltpbench_record",
+    default=False,
+    action='store_true',
+    help="If specified, the DBMS will not record pipeline nor query metrics."
+)
+argp.add_argument(
+    "--no_oltpbench_create",
+    default=False,
+    action='store_true',
+    help="If specified, OLTPBench will not run the create step."
+)
+argp.add_argument(
+    "--no_oltpbench_load",
+    default=False,
+    action='store_true',
+    help="If specified, OLTPBench will not run the load step."
+)
+argp.add_argument(
+    "--no_oltpbench_execute",
+    default=False,
+    action='store_true',
+    help="If specified, OLTPBench will not run the execute step."
+)
+argp.add_argument(
+    "--no_oltpbench_start_db",
+    default=False,
+    action='store_true',
+    help="If specified, the DBMS will not be started up with OLTPBench. Instead, assumed that the DBMS is running."
+)
+argp.add_argument(
+    "--oltpbench_tpcc_drop_indexes_secondary",
+    default=False,
+    action='store_true',
+    help="If specified, OLTPBench secondary indexes for TPCC will be dropped before the OLTPBench execute stage.")
 
 # Model specific
 argp.add_argument("--models", nargs='+', type=str, help="Models to use")
@@ -119,13 +155,24 @@ argp.add_argument(
 if __name__ == "__main__":
     args = argp.parse_args()
 
+    setup_fns = []
+
+    if args.oltpbench_tpcc_drop_indexes_secondary:
+        setup_fns.append(tpcc_drop_indexes_secondary)
+
     if args.generate_data:
         # Generate OLTP trace file
         gen_oltp_trace(
             tpcc_weight=args.tpcc_weight,
             tpcc_rates=args.tpcc_rates,
             pattern_iter=args.pattern_iter,
-            record_pipeline_metrics=args.record_pipeline_metrics)
+            should_record=not args.no_oltpbench_record,
+            record_pipeline_metrics=args.record_pipeline_metrics,
+            setup_fns=setup_fns,
+            start_db=not args.no_oltpbench_start_db,
+            create=not args.no_oltpbench_create,
+            load=not args.no_oltpbench_load,
+            execute=not args.no_oltpbench_execute)
     elif args.test_file is None:
         # Parse models arguments
         models_kwargs = parse_model_config(args.models, args.models_config)

@@ -24,7 +24,7 @@ class NoisePageServer:
     NoisePageServer represents a NoisePage DBMS instance.
     """
 
-    def __init__(self, host=DEFAULT_DB_HOST, port=DEFAULT_DB_PORT, build_type='', server_args={},
+    def __init__(self, host=DEFAULT_DB_HOST, port=DEFAULT_DB_PORT, build_type='', server_args=None,
                  db_output_file=DEFAULT_DB_OUTPUT_FILE):
         """
         Creates an instance of the DB that can be started, stopped, or restarted.
@@ -43,6 +43,9 @@ class NoisePageServer:
         db_output_file : str, filepath
             The output file that the DB should output its logs to.
         """
+        if server_args is None:
+            server_args = {}
+
         default_server_args = {
             'wal_file_path': DEFAULT_DB_WAL_FILE
         }
@@ -225,7 +228,7 @@ class NoisePageServer:
                 conn.set_session(autocommit=autocommit)
                 with conn.cursor() as cursor:
                     if not quiet:
-                        LOG.info(f"Executing SQL on {self.identity}: {sql}")
+                        LOG.info(f"Executing SQL on [host={self.db_host},port={self.db_port},user={user}]: {sql}")
                     cursor.execute(sql)
                     if expect_result:
                         rows = cursor.fetchall()
@@ -267,6 +270,8 @@ def get_binary_directory(build_type):
     path_list = [
         ("standard", "build"),
         ("CLion", "cmake-build-{}".format(build_type)),
+        ("cwd", os.getcwd()),
+        ("cwd_parent", pathlib.Path(os.getcwd()).parent.absolute())
     ]
     for _, path in path_list:
         bin_dir = os.path.join(DIR_REPO, path, "bin")
