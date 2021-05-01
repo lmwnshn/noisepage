@@ -1,9 +1,9 @@
-
 #include "self_driving/planning/mcts/tree_node.h"
 
 #include <cmath>
 #include <random>
 
+#include "common/json.h"
 #include "loggers/selfdriving_logger.h"
 #include "self_driving/forecasting/workload_forecast.h"
 #include "self_driving/planning/action/abstract_action.h"
@@ -14,14 +14,17 @@
 
 namespace noisepage::selfdriving::pilot {
 
+std::atomic<treenode_id_t> TreeNode::next_treenode_id{0};
+
 TreeNode::TreeNode(common::ManagedPointer<TreeNode> parent, action_id_t current_action, double current_segment_cost,
                    double later_segments_cost)
-    : is_leaf_{true},
+    : treenode_id_(next_treenode_id++),
+      is_leaf_{true},
       depth_(parent == nullptr ? 0 : parent->depth_ + 1),
       current_action_(current_action),
+      number_of_visits_{1},
       ancestor_cost_(current_segment_cost + (parent == nullptr ? 0 : parent->ancestor_cost_)),
-      parent_(parent),
-      number_of_visits_{1} {
+      parent_(parent) {
   if (parent != nullptr) parent->is_leaf_ = false;
   cost_ = ancestor_cost_ + later_segments_cost;
   SELFDRIVING_LOG_INFO(
@@ -159,5 +162,31 @@ void TreeNode::BackPropogate(common::ManagedPointer<Pilot> pilot,
     curr = curr->parent_;
   }
 }
+
+nlohmann::json TreeNode::ToJson() const {
+  nlohmann::json json;
+
+  json["treenode_id"] = treenode_id_.ToJson();
+  json["is_leaf"] = is_leaf_;
+  json["depth"] = depth_;
+  json["current_action"] = current_action_;
+  json["ancestor_cost"] = ancestor_cost_;
+  json["cost"] = cost_;
+  // As a hack, instead of trying to serialize the parent node directly, we just serialize the parent ID.
+  json["parent_id"] = parent_->treenode_id_.ToJson();
+
+  std::vector<nlohmann::json> json_children;
+  json_children.reserve(children_.size());
+  for (const auto &child : children_) {
+    json_children.emplace_back(child->ToJson());
+  }
+  json["children"] = std::move(json_children);
+
+  return json;
+}
+
+void TreeNode::FromJson(const nlohmann::json &j) {}
+
+DEFINE_JSON_BODY_DECLARATIONS(pilot::TreeNode);
 
 }  // namespace noisepage::selfdriving::pilot

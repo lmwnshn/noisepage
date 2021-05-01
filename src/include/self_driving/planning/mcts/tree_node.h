@@ -6,8 +6,10 @@
 #include <unordered_set>
 #include <vector>
 
+#include "common/json_header.h"
 #include "common/managed_pointer.h"
 #include "self_driving/planning/action/action_defs.h"
+#include "self_driving/planning/mcts/mcts_defs.h"
 
 #define EPSILON 1e-3
 #define NULL_ACTION INT32_MAX
@@ -90,6 +92,12 @@ class TreeNode {
    */
   action_id_t GetCurrentAction() { return current_action_; }
 
+  /** @return The JSON representation of this TreeNode. */
+  nlohmann::json ToJson() const;
+
+  /** Initialize the fields of this TreeNode from the given JSON representation. */
+  void FromJson(const nlohmann::json &j);
+
  private:
   /**
    * Sample child based on cost and number of visits
@@ -133,16 +141,21 @@ class TreeNode {
    */
   void UpdateCostAndVisits(uint64_t num_expansion, double leaf_cost, double expanded_cost);
 
-  bool is_leaf_;
-  const uint64_t depth_;  // number of edges in path from root
-  const action_id_t current_action_;
-  const double ancestor_cost_;  // cost of executing segments with actions applied on path from root to current node
-  const common::ManagedPointer<TreeNode> parent_;
+  static std::atomic<treenode_id_t> next_treenode_id;  ///<  The ID to assign to the next TreeNode created.
 
-  uint64_t number_of_visits_;  // number of leaf in subtree rooted at node
-  std::vector<std::unique_ptr<TreeNode>> children_;
-  double cost_;
+  treenode_id_t treenode_id_;         ///< The ID of this TreeNode.
+  bool is_leaf_;                      ///< True if the TreeNode is a leaf. False otherwise.
+  const uint64_t depth_;              ///< The number of edges in the path from the root.
+  const action_id_t current_action_;  ///< The current action ID.
+  uint64_t number_of_visits_;         ///< The number of leaves in subtree rooted at node.
+  double cost_;                       ///< The cost of this TreeNode.
+  const double ancestor_cost_;  ///< Cost of executing segments with actions applied on path from root to current node.
+  const common::ManagedPointer<TreeNode> parent_;    ///< The parent of this TreeNode.
+  std::vector<std::unique_ptr<TreeNode>> children_;  ///< The children of this TreeNode.
 };
+
+DEFINE_JSON_HEADER_DECLARATIONS(TreeNode);
+
 }  // namespace pilot
 
 }  // namespace noisepage::selfdriving
