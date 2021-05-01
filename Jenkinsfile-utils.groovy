@@ -85,9 +85,9 @@ void stageTest(Boolean runPipelineMetrics, Map args = [:]) {
     sh 'cd build && timeout 1h ninja check-tpl'
 
     if (args.cmake.toUpperCase().contains("NOISEPAGE_USE_JUMBOTESTS=ON")) {
-        sh 'cd build && export BUILD_ABS_PATH=`pwd` && timeout 1h ninja jumbotests'
+        sh 'cd build && export BUILD_ABS_PATH=`pwd` && PYTHONPATH=.. timeout 1h ninja jumbotests'
     } else {
-        sh 'cd build && export BUILD_ABS_PATH=`pwd` && timeout 1h ninja unittest'
+        sh 'cd build && export BUILD_ABS_PATH=`pwd` && PYTHONPATH=.. timeout 1h ninja unittest'
     }
 
     if (args.cmake.toUpperCase().contains("NOISEPAGE_GENERATE_COVERAGE=ON")) {
@@ -261,11 +261,71 @@ void stageModeling() {
     sh script: '''
     cd build
     export BUILD_ABS_PATH=`pwd`
-    timeout 10m ninja self_driving_e2e_test
+    PYTHONPATH=.. timeout 10m ninja self_driving_e2e_test
     ''', label: 'Running self-driving end-to-end test'
 
     // We need `coverage combine` because coverage files are generated separately for each test and then moved into the
     // the build root by `run-test.sh`
+    sh script :'''
+    cd build
+    coverage combine
+    ''', label: 'Combine Python code coverage.'
+
+    uploadCoverage()
+
+    stagePost()
+}
+
+void stagePilot() {
+    stagePre()
+    installPackages()
+
+    // Build the noisepage DBMS and the execution_runners binary in release mode for efficient data generation.
+    buildNoisePage([buildCommand:'ninja noisepage', cmake:
+        '-DCMAKE_BUILD_TYPE=Release -DNOISEPAGE_UNITY_BUILD=ON -DNOISEPAGE_USE_JEMALLOC=ON'
+    ])
+
+    buildNoisePageTarget("execution_runners")
+    // The parameters to the execution_runners target are arbitrarily picked to complete tests within 10 minutes while
+    // still exercising all OUs and generating a reasonable amount of training data.
+    //
+    // Specifically, the parameters chosen are:
+    // - execution_runner_rows_limit=100, which sets the max number of rows/tuples processed to be 100 (small table).
+    // - rerun=0, which skips rerun since we are not testing benchmark performance here.
+    // - warm_num=1, which also tests the warm up phase for the execution_runners.
+    sh script :'''
+    cd build/bin
+    ../benchmark/execution_runners --execution_runner_rows_limit=100 --rerun=0 --warm_num=1
+    ''', label: 'OU model training data generation'
+
+    // This generates execution_SEQ(numbers).csv files in the build/bin directory.
+
+    sh script:'''
+    cd build/bin
+    mkdir ou_runner_input
+    mkdir ou_runner_model_results
+    mkdir ou_runner_trained_model
+    ''', label: 'Create folders for OU model training.'
+
+    sh script:'''
+    cd build/bin
+    mv *SEQ*.csv ou_runner_input
+    ''', label: 'Move OU model training data to the ou_runner_input folder.'
+
+    sh script:'''
+    cd build/bin
+    PYTHONPATH=../.. python3 -m script.self_driving.modeling.ou_model_trainer --input_path=./ou_runner_input --model_results_path=./ou_runner_model_results --save_path=./ou_runner_trained_model
+    ''', label: 'Train OU models.'
+
+    buildNoisePage([buildCommand:'ninja noisepage', cmake:
+        '-DCMAKE_BUILD_TYPE=Debug -DNOISEPAGE_GENERATE_COVERAGE=ON'
+    ])
+
+    sh script :'''
+    cd build
+    PYTHONPATH=.. timeout 20m python3 -m script.testing.self_driving.jenkins
+    ''', label: 'Test the pilot planning.'
+
     sh script :'''
     cd build
     coverage combine

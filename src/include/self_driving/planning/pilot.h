@@ -74,7 +74,10 @@ class Pilot {
   /** The default timeout for pilot futures. Inferences take milliseconds, but CI is flaky. */
   static constexpr std::chrono::seconds FUTURE_TIMEOUT{10};
 
-  /** Describes how the workload forecast should be initialized */
+  /**
+   * Describes how the workload forecast should be initialized.
+   * @warning Keep in sync with the pilot_workload_forecast_init_mode setting.
+   */
   enum class WorkloadForecastInitMode : uint8_t {
     /**
      * Construct the workload forecast solely from data stored in internal tables.
