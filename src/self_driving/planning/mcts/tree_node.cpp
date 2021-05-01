@@ -166,14 +166,15 @@ void TreeNode::BackPropogate(common::ManagedPointer<Pilot> pilot,
 nlohmann::json TreeNode::ToJson() const {
   nlohmann::json json;
 
-  json["treenode_id"] = treenode_id_.ToJson();
+  json["treenode_id"] = treenode_id_;
   json["is_leaf"] = is_leaf_;
   json["depth"] = depth_;
   json["current_action"] = current_action_;
   json["ancestor_cost"] = ancestor_cost_;
   json["cost"] = cost_;
-  // As a hack, instead of trying to serialize the parent node directly, we just serialize the parent ID.
-  json["parent_id"] = parent_->treenode_id_.ToJson();
+  // TODO(WAN): As a hack, instead of trying to serialize the parent node directly, we just serialize the parent ID.
+  // TODO(WAN): As another hack, self treenode id if no parent aka the parent is yourself.
+  json["parent_id"] = parent_ != nullptr ? parent_->treenode_id_ : treenode_id_;
 
   std::vector<nlohmann::json> json_children;
   json_children.reserve(children_.size());
