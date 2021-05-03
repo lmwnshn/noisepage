@@ -542,4 +542,13 @@ SETTING_string(
     false,
     noisepage::settings::Callbacks::NoOp
 )
+
+// Profiling
+SETTING_bool(
+    profile_enable,
+    "Whether profiling is enabled (default: false)",
+    false,
+    true,
+    noisepage::settings::Callbacks::NoOp
+)
     // clang-format on

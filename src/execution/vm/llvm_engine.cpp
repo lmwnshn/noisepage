@@ -1133,14 +1133,6 @@ void LLVMEngine::Shutdown() {
 std::unique_ptr<LLVMEngine::CompiledModule> LLVMEngine::Compile(const BytecodeModule &module,
                                                                 const LLVMEngineCompilerOptions &options,
                                                                 const common::ManagedPointer<FunctionProfile> profile) {
-  std::cout << "|--| Profile strategy "
-            << (profile->GetStrategy() == OptimizationStrategy::NOOP
-                    ? "NOOP"
-                    : (profile->GetStrategy() == OptimizationStrategy::PMENON         ? "PMENON"
-                       : (profile->GetStrategy() == OptimizationStrategy::RANDOM_ADD) ? "RANDOM_ADD"
-                                                                                      : "wtf"))
-            << ", input (combined): " << profile->GetCombinedPrev().ToStrLong() << std::endl;
-
   CompiledModuleBuilder builder(options, module);
 
   builder.DeclareStaticLocals();

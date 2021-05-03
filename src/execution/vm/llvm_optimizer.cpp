@@ -516,7 +516,7 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
       pass.transform_(function_passes);
       applied_transforms_dbg += pass.name_ + ";";
     }
-    if (can_profile) {
+    if (can_profile && false) {
       std::cout << fmt::format("|--| Picked ({}): {}", func_name, applied_transforms_dbg) << std::endl;
     }
 
@@ -524,7 +524,7 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
     function_passes.doInitialization();
     uint64_t elapsed_ns;
     {
-      if (can_profile) {
+      if (can_profile && false) {
         auto func_profile = profile->GetPrev(func_name);
         std::cout << fmt::format("|----| Profile input ({}): {}", func_name, func_profile->ToStrLong()) << std::endl;
       }
@@ -559,6 +559,15 @@ void FunctionOptimizer::FinalizeStats(const common::ManagedPointer<llvm::Module>
   }
 }
 
+const uint64_t FunctionOptimizer::SlowGetTransformIdx(const std::string &transform_name) {
+  for (uint64_t i = 0; i < sizeof(TRANSFORMS) / sizeof(TRANSFORMS[0]); ++i) {
+    if (TRANSFORMS[i].name_ == transform_name) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::string &func_name,
                                                                 const OptimizationStrategy strategy,
                                                                 const OptimizationStrategy prev_strategy,
@@ -574,7 +583,11 @@ std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::strin
     }
     case OptimizationStrategy::PMENON: {
       if (profile->GetIterationTransformCount() == 0) {
-        profile->SetProfileLevelTransforms({TRANSFORMS[TRANSFORMS_IDX_PMENON]});
+        //        profile->SetProfileLevelTransforms({TRANSFORMS[TRANSFORMS_IDX_PMENON]});
+        profile->SetProfileLevelTransforms(
+            {TRANSFORMS[SlowGetTransformIdx("aggressive-instcombine")], TRANSFORMS[SlowGetTransformIdx("reassociate")],
+             TRANSFORMS[SlowGetTransformIdx("gvn")], TRANSFORMS[SlowGetTransformIdx("simplifycfg")],
+             TRANSFORMS[SlowGetTransformIdx("adce")], TRANSFORMS[SlowGetTransformIdx("simplifycfg")]});
         profile->IncrementIterationTransformCount();
       }
       return transforms;
@@ -588,6 +601,19 @@ std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::strin
       if (profile->GetIterationTransformCount() == 0) {
         // Add a random transform.
         transforms.emplace_back(TRANSFORMS[rng_llvm_only_(gen_)]);
+        profile->SetProfileLevelTransforms(transforms);
+        profile->IncrementIterationTransformCount();
+      }
+      return transforms;
+    }
+    case OptimizationStrategy::RANDOM_MUTATE: {
+      std::vector<FunctionTransform> transforms = profile->GetProfileLevelTransforms();
+      // Only do work if this is the first time this iteration (hacks around GetTransform called by every func).
+      if (profile->GetIterationTransformCount() == 0 && !transforms.empty()) {
+        std::uniform_int_distribution<uint32_t> dist(0, transforms.size() - 1);
+        // Mutate a random transform.
+        uint64_t mutate_idx = dist(gen_);
+        transforms[mutate_idx] = TRANSFORMS[rng_llvm_only_(gen_)];
         profile->SetProfileLevelTransforms(transforms);
         profile->IncrementIterationTransformCount();
       }

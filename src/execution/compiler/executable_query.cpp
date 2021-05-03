@@ -221,6 +221,15 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
     profile->EndIteration();
 
     std::cout << "|--| RECOMPILE." << std::endl;
+    std::cout << "|--| Profile strategy "
+              << (controls.strategy_ == vm::OptimizationStrategy::NOOP
+                      ? "NOOP"
+                      : (controls.strategy_ == vm::OptimizationStrategy::PMENON ? "PMENON"
+                         : (controls.strategy_ == vm::OptimizationStrategy::RANDOM_ADD)
+                             ? "RANDOM_ADD"
+                             : (controls.strategy_ == vm::OptimizationStrategy::RANDOM_MUTATE ? "RANDOM_MUTATE"
+                                                                                              : "wtf")))
+              << ", input (combined): " << profile->GetCombinedPrev().ToStrLong() << std::endl;
     fragment->ForceRecompile();
     if (controls.should_print_agg_) {
       auto agg = profile->GetCombinedAgg();

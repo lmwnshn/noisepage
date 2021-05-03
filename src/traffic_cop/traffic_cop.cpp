@@ -525,38 +525,40 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
 
   const auto exec_query = portal->GetStatement()->GetExecutableQuery();
 
-  // Profile run five times.
-  auto db_oid = connection_ctx->GetDatabaseOid();
-  execution::exec::NoOpResultConsumer noop_consumer;
+  bool profile_enabled = settings_manager_->GetBool(settings::Param::profile_enable);
+  if (profile_enabled) {
+    // Profile run.
+    auto db_oid = connection_ctx->GetDatabaseOid();
+    execution::exec::NoOpResultConsumer noop_consumer;
+    // TODO(WAN): Gate profiling behind a setting.
+    auto run_profile_once = [&](const execution::vm::ProfilerControls &controls) {
+      auto fake_txn = txn_manager_->BeginTransaction();
+      auto tmp_accessor = catalog_->GetAccessor(common::ManagedPointer(fake_txn), db_oid, DISABLED);
+      auto tmp_exec_ctx = std::make_unique<execution::exec::ExecutionContext>(
+          db_oid, common::ManagedPointer(fake_txn), noop_consumer, physical_plan->GetOutputSchema().Get(),
+          common::ManagedPointer(tmp_accessor), exec_settings, metrics, replication_manager_, recovery_manager_);
+      exec_query->RunProfileRecompile(common::ManagedPointer(tmp_exec_ctx), controls);
+      txn_manager_->Abort(fake_txn);
+    };
 
-  // TODO(WAN): Gate profiling behind a setting.
-  auto run_profile_once = [&](const execution::vm::ProfilerControls &controls) {
-    auto fake_txn = txn_manager_->BeginTransaction();
-    auto tmp_accessor = catalog_->GetAccessor(common::ManagedPointer(fake_txn), db_oid, DISABLED);
-    auto tmp_exec_ctx = std::make_unique<execution::exec::ExecutionContext>(
-        db_oid, common::ManagedPointer(fake_txn), noop_consumer, physical_plan->GetOutputSchema().Get(),
-        common::ManagedPointer(tmp_accessor), exec_settings, metrics, replication_manager_, recovery_manager_);
-    exec_query->RunProfileRecompile(common::ManagedPointer(tmp_exec_ctx), controls);
-    txn_manager_->Abort(fake_txn);
-  };
-
-  {
-    execution::vm::ProfilerControls controls;
-    controls.num_iterations_left_ = 30;
-    controls.should_agg_ = true;
-    // Get a baseline.
-    controls.strategy_ = execution::vm::OptimizationStrategy::NOOP;
-    controls.should_print_fragment_ = true;
-    run_profile_once(controls);
-    controls.should_print_fragment_ = false;
-    // Randomly add.
-    controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_ADD;
-    while (controls.num_iterations_left_-- > 1) {
+    {
+      execution::vm::ProfilerControls controls;
+      controls.num_iterations_left_ = 250;
+      controls.should_agg_ = true;
+      // Get a baseline.
+      controls.strategy_ = execution::vm::OptimizationStrategy::PMENON;
+      controls.should_print_fragment_ = true;
+      run_profile_once(controls);
+      controls.should_print_fragment_ = false;
+      // Randomly add.
+      controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_MUTATE;
+      while (controls.num_iterations_left_-- > 1) {
+        run_profile_once(controls);
+      }
+      controls.should_print_agg_ = true;
+      controls.should_print_fragment_ = true;
       run_profile_once(controls);
     }
-    controls.should_print_agg_ = true;
-    controls.should_print_fragment_ = true;
-    run_profile_once(controls);
   }
 
   try {

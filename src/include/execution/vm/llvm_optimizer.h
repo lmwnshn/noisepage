@@ -24,6 +24,7 @@ enum class OptimizationStrategy {
   PMENON,
   NOOP,
   RANDOM_ADD,
+  RANDOM_MUTATE,
 };
 
 class ProfilerControls {
@@ -184,6 +185,8 @@ class FunctionOptimizer {
   void FinalizeStats(common::ManagedPointer<llvm::Module> llvm_module, const LLVMEngineCompilerOptions &options,
                      common::ManagedPointer<FunctionProfile> profile);
 
+  static const uint64_t SlowGetTransformIdx(const std::string &transform_name);
+
   static const FunctionTransform TRANSFORMS[];
 
   static const uint64_t TRANSFORMS_IDX_LAST_LLVM;  ///< Index of last LLVM builtin transform, inclusive.
@@ -193,7 +196,7 @@ class FunctionOptimizer {
 
   std::random_device rd_{};
   std::mt19937 gen_{rd_()};
-  std::uniform_int_distribution<int> rng_llvm_only_;
+  std::uniform_int_distribution<uint32_t> rng_llvm_only_;
 };
 
 }  // namespace noisepage::execution::vm
