@@ -310,8 +310,20 @@ const uint64_t FunctionOptimizer::TRANSFORMS_IDX_PMENON =
 
 // FunctionMetadata.
 
+std::string FunctionMetadata::ToStrLong() const { return ToStrShort() + " " + ToStrOnlyTransforms(); }
+
 std::string FunctionMetadata::ToStrShort() const {
   return fmt::format("[{} insts, {} opt ns, {} exec ns]", inst_count_, optimize_ns_, exec_ns_);
+}
+
+std::string FunctionMetadata::ToStrOnlyTransforms() const {
+  // TODO(WAN): stringstreamblablabla
+  std::string result{"["};
+  for (const auto &transform : transforms_) {
+    result += transform.name_ + ";";
+  }
+  result += "]";
+  return result;
 }
 
 // FunctionProfile.
@@ -319,6 +331,8 @@ std::string FunctionMetadata::ToStrShort() const {
 void FunctionProfile::EndIteration() {
   auto init_agg = [](MetadataAgg *agg, const FunctionMetadata &sample) {
     agg->num_samples_ = 1;
+    agg->original_ = sample;
+    agg->last_ = sample;
     agg->min_ = sample;
     agg->mean_ = sample;
     agg->max_ = sample;
@@ -326,6 +340,7 @@ void FunctionProfile::EndIteration() {
 
   auto update_agg = [](MetadataAgg *agg, const FunctionMetadata &sample) {
     agg->num_samples_++;
+    agg->last_ = sample;
     // min
     agg->min_.inst_count_ = std::min(agg->min_.inst_count_, sample.inst_count_);
     agg->min_.optimize_ns_ = std::min(agg->min_.optimize_ns_, sample.optimize_ns_);
@@ -346,6 +361,7 @@ void FunctionProfile::EndIteration() {
   for (auto &entry : functions_) {
     entry.second.prev_prev_ = entry.second.prev_;
     entry.second.prev_ = entry.second.curr_;
+
     if (should_update_agg_) {
       if (!is_agg_initialized_) {
         init_agg(&entry.second.agg_, entry.second.prev_);
@@ -380,7 +396,7 @@ FunctionMetadata FunctionProfile::GetCombinedPrev() const {
       total_exec_ns += abs(md.exec_ns_);
     }
   }
-  return {"", total_inst_cnt, total_opt_ns, total_exec_ns};
+  return {"", total_inst_cnt, total_opt_ns, total_exec_ns, strategy_, transforms_};
 }
 
 FunctionMetadata FunctionProfile::GetCombinedPrevPrev() const {
@@ -410,6 +426,10 @@ void FunctionProfile::StartAgg() {
   combined_agg_ = MetadataAgg{};
 }
 
+void FunctionProfile::SetProfileLevelTransforms(std::vector<FunctionTransform> transforms) {
+  transforms_ = std::move(transforms);
+}
+
 // FunctionOptimizer.
 
 FunctionOptimizer::FunctionOptimizer(common::ManagedPointer<llvm::TargetMachine> target_machine)
@@ -431,6 +451,7 @@ void FunctionOptimizer::Simplify(const common::ManagedPointer<llvm::Module> llvm
 void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm_module,
                                  UNUSED_ATTRIBUTE const LLVMEngineCompilerOptions &options,
                                  const common::ManagedPointer<FunctionProfile> profile) {
+  profile->GetCombinedAgg()->last_.transforms_ = profile->GetCombinedPrev().transforms_;
   for (llvm::Function &func : *llvm_module) {
     std::string func_name{func.getName()};
     // TODO(WAN): Only prints out functions that we can collect execution times for right now.
@@ -472,9 +493,7 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
     {
       if (can_profile) {
         auto func_profile = profile->GetPrev(func_name);
-        std::cout << fmt::format("|----| Profile input ({}): {} cnt {} opt {} exec", func_name,
-                                 func_profile->inst_count_, func_profile->optimize_ns_, func_profile->exec_ns_)
-                  << std::endl;
+        std::cout << fmt::format("|----| Profile input ({}): {}", func_name, func_profile->ToStrLong()) << std::endl;
       }
     }
     {
@@ -487,6 +506,7 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
 
     function_passes.doFinalization();
   }
+
   FinalizeStats(llvm_module, options, profile);
 }
 
@@ -510,10 +530,17 @@ std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::strin
                                                                 const OptimizationStrategy strategy,
                                                                 common::ManagedPointer<FunctionProfile> profile) {
   switch (strategy) {
-    case OptimizationStrategy::NOOP:
+    case OptimizationStrategy::NOOP: {
+      profile->SetProfileLevelTransforms({});
+      profile->IncrementIterationTransformCount();
       return {};
-    case OptimizationStrategy::PMENON:
-      return {TRANSFORMS[TRANSFORMS_IDX_PMENON]};
+    }
+    case OptimizationStrategy::PMENON: {
+      std::vector<FunctionTransform> transforms = {TRANSFORMS[TRANSFORMS_IDX_PMENON]};
+      profile->SetProfileLevelTransforms(transforms);
+      profile->IncrementIterationTransformCount();
+      return transforms;
+    }
     case OptimizationStrategy::RANDOM_ADD: {
       // TODO(WAN): While we support per-function stuff, it is a headache to explain those results.
       //            Instead, just use profile-level transforms.
@@ -525,7 +552,7 @@ std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::strin
         FunctionMetadata default_metadata{};
         auto prevprev = profile->GetCombinedPrevPrev();
         const int64_t epsilon_ns = 500;  // If we get better by at least 500 ns, keep it.
-        if (!(prevprev == default_metadata)) {
+        if (!transforms.empty() && !(prevprev == default_metadata)) {
           auto prev = profile->GetCombinedPrev();
           auto diff = prevprev - prev;
           if (diff.exec_ns_ > epsilon_ns) {

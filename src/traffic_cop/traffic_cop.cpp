@@ -541,14 +541,18 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
   };
 
   execution::vm::ProfilerControls controls;
-  controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_ADD;
   controls.num_iterations_left_ = 30;
   controls.should_agg_ = true;
+  controls.should_print_agg_ = true;
 
+  // Get a baseline.
+  controls.strategy_ = execution::vm::OptimizationStrategy::NOOP;
+  run_profile_once(controls);
+  // Randomly add.
+  controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_ADD;
   while (controls.num_iterations_left_-- > 1) {
     run_profile_once(controls);
   }
-  controls.should_print_agg_ = true;
   run_profile_once(controls);
 
   try {

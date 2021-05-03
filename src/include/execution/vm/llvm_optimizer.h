@@ -65,7 +65,9 @@ struct FunctionMetadata {
     return md;
   }
 
+  std::string ToStrLong() const;
   std::string ToStrShort() const;
+  std::string ToStrOnlyTransforms() const;
 };
 
 /**
@@ -79,6 +81,8 @@ class FunctionProfile {
  public:
   struct MetadataAgg {
     uint64_t num_samples_;
+    FunctionMetadata original_;
+    FunctionMetadata last_;
     FunctionMetadata min_;
     FunctionMetadata mean_;
     FunctionMetadata max_;
@@ -113,10 +117,10 @@ class FunctionProfile {
 
   FunctionMetadata GetCombinedPrevPrev() const;
   FunctionMetadata GetCombinedPrev() const;
-  const MetadataAgg &GetCombinedAgg() const { return combined_agg_; }
+  common::ManagedPointer<MetadataAgg> GetCombinedAgg() { return common::ManagedPointer(&combined_agg_); }
 
   const std::vector<FunctionTransform> &GetProfileLevelTransforms() const { return transforms_; }
-  void SetProfileLevelTransforms(std::vector<FunctionTransform> transforms) { transforms_ = std::move(transforms); }
+  void SetProfileLevelTransforms(std::vector<FunctionTransform> transforms);
   uint64_t GetIterationTransformCount() const { return iteration_transform_count_; }
   void IncrementIterationTransformCount() { iteration_transform_count_++; }
 
