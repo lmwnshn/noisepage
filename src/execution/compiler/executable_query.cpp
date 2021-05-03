@@ -226,9 +226,9 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
       std::cout << "|----| Agg num_samples: " << agg->num_samples_ << std::endl;
       std::cout << "|----| Agg original: " << agg->original_.ToStrLong() << std::endl;
       std::cout << "|----| Agg last: " << agg->last_.ToStrLong() << std::endl;
-      std::cout << "|----| Agg min: " << agg->min_.ToStrShort() << std::endl;
+      std::cout << "|----| Agg min: " << agg->min_.ToStrLong() << std::endl;
       std::cout << "|----| Agg mean: " << agg->mean_.ToStrShort() << std::endl;
-      std::cout << "|----| Agg max: " << agg->max_.ToStrShort() << std::endl;
+      std::cout << "|----| Agg max: " << agg->max_.ToStrLong() << std::endl;
     }
   }
 
