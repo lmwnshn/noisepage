@@ -189,7 +189,7 @@ void ExecutableQuery::Run(common::ManagedPointer<exec::ExecutionContext> exec_ct
 }
 
 void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::ExecutionContext> exec_ctx,
-                                          const ProfilerControls &controls) {
+                                          const vm::ProfilerControls &controls) {
   auto mode = vm::ExecutionMode::Compiled;
   auto query_state = std::make_unique<byte[]>(query_state_size_);
 
@@ -202,6 +202,7 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
 
   for (const auto &fragment : fragments_) {
     auto profile = fragment->GetFunctionProfile();
+    profile->SetStrategy(controls.strategy_);
     if (controls.should_agg_) {
       if (!profile->IsAgg()) {
         profile->StartAgg();
@@ -216,6 +217,7 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
     profile->SetNumIterationsLeft(controls.num_iterations_left_);
     fragment->Run(query_state.get(), mode);
     profile->EndIteration();
+
     std::cout << "|--| RECOMPILE." << std::endl;
     fragment->ForceRecompile();
     if (controls.should_print_agg_) {

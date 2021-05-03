@@ -19,6 +19,7 @@
 #include "execution/exec/output.h"
 #include "execution/sql/ddl_executors.h"
 #include "execution/sql/value.h"
+#include "execution/vm/llvm_optimizer.h"
 #include "execution/vm/module.h"
 #include "metrics/metrics_store.h"
 #include "network/connection_context.h"
@@ -529,7 +530,7 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
   execution::exec::NoOpResultConsumer noop_consumer;
 
   // TODO(WAN): Gate profiling behind a setting.
-  auto run_profile_once = [&](const execution::compiler::ExecutableQuery::ProfilerControls &controls) {
+  auto run_profile_once = [&](const execution::vm::ProfilerControls &controls) {
     auto fake_txn = txn_manager_->BeginTransaction();
     auto tmp_accessor = catalog_->GetAccessor(common::ManagedPointer(fake_txn), db_oid, DISABLED);
     auto tmp_exec_ctx = std::make_unique<execution::exec::ExecutionContext>(
@@ -539,7 +540,8 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
     txn_manager_->Abort(fake_txn);
   };
 
-  execution::compiler::ExecutableQuery::ProfilerControls controls;
+  execution::vm::ProfilerControls controls;
+  controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_ADD;
   controls.num_iterations_left_ = 30;
   controls.should_agg_ = true;
 

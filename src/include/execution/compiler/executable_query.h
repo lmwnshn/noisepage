@@ -32,6 +32,7 @@ class Region;
 }  // namespace util
 
 namespace vm {
+class ProfilerControls;
 class FunctionProfile;
 class Module;
 }  // namespace vm
@@ -141,16 +142,10 @@ class ExecutableQuery {
   void Run(common::ManagedPointer<exec::ExecutionContext> exec_ctx,
            vm::ExecutionMode mode = vm::ExecutionMode::Interpret);
 
-  struct ProfilerControls {
-    uint64_t num_iterations_left_{0};
-    bool should_agg_{false};
-    bool should_print_agg_{false};
-  };
-
   /**
    * Execute the query under profiling, then recompile the query.
    */
-  void RunProfileRecompile(common::ManagedPointer<exec::ExecutionContext> exec_ctx, const ProfilerControls &controls);
+  void RunProfileRecompile(common::ManagedPointer<exec::ExecutionContext> exec_ctx, const vm::ProfilerControls &controls);
 
   /**
    * @return The physical plan this executable query implements.

@@ -19,23 +19,7 @@
 
 namespace noisepage::execution::vm {
 
-FunctionTransform FunctionOptimizer::transforms[] = {
-    // ---------------------------------------------------------------------------------------------------------------
-    // Custom hand-picked sets of transformations.
-    // ---------------------------------------------------------------------------------------------------------------
-
-    /// Harness the power of Prashanth Menon.
-    {"pmenon",
-     [](llvm::legacy::FunctionPassManager &fpm) {
-       // Add custom passes. Hand-selected based on empirical evaluation.
-       fpm.add(llvm::createInstructionCombiningPass());
-       fpm.add(llvm::createReassociatePass());
-       fpm.add(llvm::createGVNPass());
-       fpm.add(llvm::createCFGSimplificationPass());
-       fpm.add(llvm::createAggressiveDCEPass());
-       fpm.add(llvm::createCFGSimplificationPass());
-     }},
-
+const FunctionTransform FunctionOptimizer::TRANSFORMS[] = {
     // ---------------------------------------------------------------------------------------------------------------
     // LLVM transformations.
     // Names are copied from the corresponding LLVM argument and may have a suffix representing different configs.
@@ -293,7 +277,34 @@ FunctionTransform FunctionOptimizer::transforms[] = {
     {"nd-gvn", [](llvm::legacy::FunctionPassManager &fpm) { fpm.add(llvm::createNewGVNPass()); }},
     {"nd-loop-inst-simplify",
      [](llvm::legacy::FunctionPassManager &fpm) { fpm.add(llvm::createLoopInstSimplifyPass()); }},
+
+    // WARNING: Keep the name of the last LLVM transform in sync with LAST_LLVM_TRANSFORM_IDX's lookup name.
+
+    // ---------------------------------------------------------------------------------------------------------------
+    // Custom hand-picked sets of transformations.
+    // ---------------------------------------------------------------------------------------------------------------
+
+    /// Harness the power of Prashanth Menon.
+    {"pmenon",
+     [](llvm::legacy::FunctionPassManager &fpm) {
+       // Add custom passes. Hand-selected based on empirical evaluation.
+       fpm.add(llvm::createInstructionCombiningPass());
+       fpm.add(llvm::createReassociatePass());
+       fpm.add(llvm::createGVNPass());
+       fpm.add(llvm::createCFGSimplificationPass());
+       fpm.add(llvm::createAggressiveDCEPass());
+       fpm.add(llvm::createCFGSimplificationPass());
+     }},
 };
+
+const uint64_t FunctionOptimizer::TRANSFORMS_IDX_LAST_LLVM = std::distance(
+    std::begin(TRANSFORMS),
+    std::find_if(TRANSFORMS, TRANSFORMS + (sizeof(TRANSFORMS) / sizeof(TRANSFORMS[0])),
+                 [](const FunctionTransform &transform) { return transform.name_ == "nd-loop-inst-simplify"; }));
+const uint64_t FunctionOptimizer::TRANSFORMS_IDX_PMENON =
+    std::distance(std::begin(TRANSFORMS),
+                  std::find_if(TRANSFORMS, TRANSFORMS + (sizeof(TRANSFORMS) / sizeof(TRANSFORMS[0])),
+                               [](const FunctionTransform &transform) { return transform.name_ == "pmenon"; }));
 
 // Start of actual code.
 
@@ -333,6 +344,7 @@ void FunctionProfile::EndIteration() {
   };
 
   for (auto &entry : functions_) {
+    entry.second.prev_prev_ = entry.second.prev_;
     entry.second.prev_ = entry.second.curr_;
     if (should_update_agg_) {
       if (!is_agg_initialized_) {
@@ -350,20 +362,39 @@ void FunctionProfile::EndIteration() {
   } else {
     update_agg(&combined_agg_, GetCombinedPrev());
   }
+
+  iteration_transform_count_ = 0;
 }
 
 FunctionMetadata FunctionProfile::GetCombinedPrev() const {
-  uint64_t total_inst_cnt = 0;
-  uint64_t total_opt_ns = 0;
-  uint64_t total_exec_ns = 0;
+  int64_t total_inst_cnt = 0;
+  int64_t total_opt_ns = 0;
+  int64_t total_exec_ns = 0;
   for (auto &entry : functions_) {
     bool is_step = std::find(steps_.cbegin(), steps_.cend(), entry.first) != steps_.cend();
     bool is_teardown = std::find(teardowns_.cbegin(), teardowns_.cend(), entry.first) != teardowns_.cend();
     if (is_step || is_teardown) {
       const FunctionMetadata &md = entry.second.prev_;
-      total_inst_cnt += md.inst_count_;
-      total_opt_ns += md.optimize_ns_;
-      total_exec_ns += md.exec_ns_;
+      total_inst_cnt += abs(md.inst_count_);
+      total_opt_ns += abs(md.optimize_ns_);
+      total_exec_ns += abs(md.exec_ns_);
+    }
+  }
+  return {"", total_inst_cnt, total_opt_ns, total_exec_ns};
+}
+
+FunctionMetadata FunctionProfile::GetCombinedPrevPrev() const {
+  int64_t total_inst_cnt = 0;
+  int64_t total_opt_ns = 0;
+  int64_t total_exec_ns = 0;
+  for (auto &entry : functions_) {
+    bool is_step = std::find(steps_.cbegin(), steps_.cend(), entry.first) != steps_.cend();
+    bool is_teardown = std::find(teardowns_.cbegin(), teardowns_.cend(), entry.first) != teardowns_.cend();
+    if (is_step || is_teardown) {
+      const FunctionMetadata &md = entry.second.prev_prev_;
+      total_inst_cnt += abs(md.inst_count_);
+      total_opt_ns += abs(md.optimize_ns_);
+      total_exec_ns += abs(md.exec_ns_);
     }
   }
   return {"", total_inst_cnt, total_opt_ns, total_exec_ns};
@@ -382,7 +413,7 @@ void FunctionProfile::StartAgg() {
 // FunctionOptimizer.
 
 FunctionOptimizer::FunctionOptimizer(common::ManagedPointer<llvm::TargetMachine> target_machine)
-    : target_machine_(target_machine) {}
+    : target_machine_(target_machine), rng_llvm_only_(0, TRANSFORMS_IDX_LAST_LLVM) {}
 
 void FunctionOptimizer::Simplify(const common::ManagedPointer<llvm::Module> llvm_module,
                                  UNUSED_ATTRIBUTE const LLVMEngineCompilerOptions &options,
@@ -400,35 +431,46 @@ void FunctionOptimizer::Simplify(const common::ManagedPointer<llvm::Module> llvm
 void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm_module,
                                  UNUSED_ATTRIBUTE const LLVMEngineCompilerOptions &options,
                                  const common::ManagedPointer<FunctionProfile> profile) {
-  llvm::legacy::FunctionPassManager function_passes(llvm_module.Get());
-
-  // Add the appropriate TargetTransformInfo.
-  function_passes.add(llvm::createTargetTransformInfoWrapperPass(target_machine_->getTargetIRAnalysis()));
-
-  // Build up optimization pipeline.
-  llvm::PassManagerBuilder pm_builder;
-  uint32_t opt_level = 3;
-  uint32_t size_opt_level = 0;
-  bool disable_inline_hot_call_site = false;
-  pm_builder.OptLevel = opt_level;
-  pm_builder.Inliner = llvm::createFunctionInliningPass(opt_level, size_opt_level, disable_inline_hot_call_site);
-  pm_builder.populateFunctionPassManager(function_passes);
-
-  for (FunctionTransform &pass : transforms) {
-    pass.transform_(function_passes);
-  }
-
-  // Run optimization passes on all functions.
-  function_passes.doInitialization();
-  uint64_t elapsed_ns;
   for (llvm::Function &func : *llvm_module) {
+    std::string func_name{func.getName()};
+    // TODO(WAN): Only prints out functions that we can collect execution times for right now.
+    bool is_step =
+        std::find(profile->GetSteps().cbegin(), profile->GetSteps().cend(), func_name) != profile->GetSteps().cend();
+    bool is_teardown = std::find(profile->GetTeardowns().cbegin(), profile->GetTeardowns().cend(), func_name) !=
+                       profile->GetTeardowns().cend();
+    bool can_profile = is_step || is_teardown;
+
+    llvm::legacy::FunctionPassManager function_passes(llvm_module.Get());
+
+    // Add the appropriate TargetTransformInfo.
+    function_passes.add(llvm::createTargetTransformInfoWrapperPass(target_machine_->getTargetIRAnalysis()));
+
+    // Build up optimization pipeline.
+    llvm::PassManagerBuilder pm_builder;
+    uint32_t opt_level = 3;
+    uint32_t size_opt_level = 0;
+    bool disable_inline_hot_call_site = false;
+    pm_builder.OptLevel = opt_level;
+    pm_builder.Inliner = llvm::createFunctionInliningPass(opt_level, size_opt_level, disable_inline_hot_call_site);
+    pm_builder.populateFunctionPassManager(function_passes);
+
+    // Add passes as determined by the strategy.
+    auto strategy = profile->GetStrategy();
+    auto transforms = GetTransforms(func_name, strategy, profile);
+    std::string applied_transforms_dbg{""};
+    for (FunctionTransform &pass : transforms) {
+      pass.transform_(function_passes);
+      applied_transforms_dbg += pass.name_ + ";";
+    }
+    if (can_profile) {
+      std::cout << fmt::format("|--| Picked ({}): {}", func_name, applied_transforms_dbg) << std::endl;
+    }
+
+    // Run optimization passes on the current function.
+    function_passes.doInitialization();
+    uint64_t elapsed_ns;
     {
-      std::string func_name(func.getName());
-      bool is_step =
-          std::find(profile->GetSteps().cbegin(), profile->GetSteps().cend(), func_name) != profile->GetSteps().cend();
-      bool is_teardown = std::find(profile->GetTeardowns().cbegin(), profile->GetTeardowns().cend(), func_name) !=
-                         profile->GetTeardowns().cend();
-      if (is_step || is_teardown) {
+      if (can_profile) {
         auto func_profile = profile->GetPrev(func_name);
         std::cout << fmt::format("|----| Profile input ({}): {} cnt {} opt {} exec", func_name,
                                  func_profile->inst_count_, func_profile->optimize_ns_, func_profile->exec_ns_)
@@ -439,11 +481,12 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
       common::ScopedTimer<std::chrono::nanoseconds> timer(&elapsed_ns);
       function_passes.run(func);
     }
-    profile->GetCurr(func.getName())->optimize_ns_ = elapsed_ns;
+    profile->GetCurr(func_name)->optimize_ns_ = elapsed_ns;
+    profile->GetCurr(func_name)->strategy_ = strategy;
+    profile->GetCurr(func_name)->transforms_ = transforms;
+
+    function_passes.doFinalization();
   }
-
-  function_passes.doFinalization();
-
   FinalizeStats(llvm_module, options, profile);
 }
 
@@ -460,6 +503,50 @@ void FunctionOptimizer::FinalizeStats(const common::ManagedPointer<llvm::Module>
     llvm::Function *llvm_func = llvm_module->getFunction(func_name);
     llvm::raw_string_ostream ostream(profile->GetCurr(func_name)->ir_);
     llvm_func->print(ostream, nullptr);
+  }
+}
+
+std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::string &func_name,
+                                                                const OptimizationStrategy strategy,
+                                                                common::ManagedPointer<FunctionProfile> profile) {
+  switch (strategy) {
+    case OptimizationStrategy::NOOP:
+      return {};
+    case OptimizationStrategy::PMENON:
+      return {TRANSFORMS[TRANSFORMS_IDX_PMENON]};
+    case OptimizationStrategy::RANDOM_ADD: {
+      // TODO(WAN): While we support per-function stuff, it is a headache to explain those results.
+      //            Instead, just use profile-level transforms.
+      // std::vector<FunctionTransform> transforms = profile->GetPrev(func_name)->transforms_;
+      std::vector<FunctionTransform> transforms = profile->GetProfileLevelTransforms();
+      // Only do work if this is the first time this iteration (hacks around GetTransform called by every func).
+      if (profile->GetIterationTransformCount() == 0) {
+        // Evaluate the result of the last time, if it exists.
+        FunctionMetadata default_metadata{};
+        auto prevprev = profile->GetCombinedPrevPrev();
+        const int64_t epsilon_ns = 500;  // If we get better by at least 500 ns, keep it.
+        if (!(prevprev == default_metadata)) {
+          auto prev = profile->GetCombinedPrev();
+          auto diff = prevprev - prev;
+          if (diff.exec_ns_ > epsilon_ns) {
+            std::cout << fmt::format("Better by {} exec ns ({} opt), keeping {}.", diff.exec_ns_, diff.optimize_ns_,
+                                     transforms.back().name_)
+                      << std::endl;
+          } else {
+            std::cout << fmt::format("Sucks. Change of {} exec ns ({} opt), discarding {}.", diff.exec_ns_,
+                                     diff.optimize_ns_, transforms.back().name_)
+                      << std::endl;
+            transforms.pop_back();
+          }
+        }
+
+        // Add a random transform.
+        transforms.emplace_back(TRANSFORMS[rng_llvm_only_(gen_)]);
+        profile->SetProfileLevelTransforms(transforms);
+        profile->IncrementIterationTransformCount();
+      }
+      return transforms;
+    }
   }
 }
 
