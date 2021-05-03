@@ -540,20 +540,24 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
     txn_manager_->Abort(fake_txn);
   };
 
-  execution::vm::ProfilerControls controls;
-  controls.num_iterations_left_ = 30;
-  controls.should_agg_ = true;
-  controls.should_print_agg_ = true;
-
-  // Get a baseline.
-  controls.strategy_ = execution::vm::OptimizationStrategy::NOOP;
-  run_profile_once(controls);
-  // Randomly add.
-  controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_ADD;
-  while (controls.num_iterations_left_-- > 1) {
+  {
+    execution::vm::ProfilerControls controls;
+    controls.num_iterations_left_ = 30;
+    controls.should_agg_ = true;
+    // Get a baseline.
+    controls.strategy_ = execution::vm::OptimizationStrategy::NOOP;
+    controls.should_print_fragment_ = true;
+    run_profile_once(controls);
+    controls.should_print_fragment_ = false;
+    // Randomly add.
+    controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_ADD;
+    while (controls.num_iterations_left_-- > 1) {
+      run_profile_once(controls);
+    }
+    controls.should_print_agg_ = true;
+    controls.should_print_fragment_ = true;
     run_profile_once(controls);
   }
-  run_profile_once(controls);
 
   try {
     exec_query->Run(common::ManagedPointer(exec_ctx), execution_mode_);

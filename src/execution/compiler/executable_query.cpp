@@ -74,6 +74,8 @@ common::ManagedPointer<vm::FunctionProfile> ExecutableQuery::Fragment::GetFuncti
   return module_->GetFunctionProfile();
 }
 
+void ExecutableQuery::Fragment::PrintFragment() { GetFunctionProfile()->PrintModule(); }
+
 //===----------------------------------------------------------------------===//
 //
 // Executable Query
@@ -229,6 +231,9 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
       std::cout << "|----| Agg min: " << agg->min_.ToStrLong() << std::endl;
       std::cout << "|----| Agg mean: " << agg->mean_.ToStrShort() << std::endl;
       std::cout << "|----| Agg max: " << agg->max_.ToStrLong() << std::endl;
+    }
+    if (controls.should_print_fragment_) {
+      fragment->PrintFragment();
     }
   }
 

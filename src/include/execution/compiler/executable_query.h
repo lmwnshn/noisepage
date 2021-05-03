@@ -95,6 +95,8 @@ class ExecutableQuery {
 
     common::ManagedPointer<vm::FunctionProfile> GetFunctionProfile();
 
+    void PrintFragment();
+
    private:
     // The functions that must be run (in the provided order) to execute this
     // query fragment.

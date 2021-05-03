@@ -430,6 +430,12 @@ void FunctionProfile::SetProfileLevelTransforms(std::vector<FunctionTransform> t
   transforms_ = std::move(transforms);
 }
 
+void FunctionProfile::PrintModule() {
+  for (const auto &it : functions_) {
+    std::cout << "IR for: " << it.first << GetCurr(it.first)->ir_ << std::endl;
+  }
+}
+
 // FunctionOptimizer.
 
 FunctionOptimizer::FunctionOptimizer(common::ManagedPointer<llvm::TargetMachine> target_machine)
@@ -452,7 +458,8 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
                                  UNUSED_ATTRIBUTE const LLVMEngineCompilerOptions &options,
                                  const common::ManagedPointer<FunctionProfile> profile) {
   // Check if the previous pass was good.
-  {
+  bool was_good = true;
+  if (was_good) {
     // This currently picks the minimum execution time always.
 
     // Evaluate the result of the last time, if it exists.
@@ -461,7 +468,7 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
     auto prev = profile->GetCombinedPrev();
     if (prev.transforms_ != agg_min.transforms_ && !(agg_min == default_metadata)) {
       auto diff = agg_min - prev;
-      const int64_t epsilon_ns = 500;  // If we get better by at least 500 ns, keep it.
+      const int64_t epsilon_ns = 5000;  // If we get better by at least epsilon ns, keep it.
       if (diff.exec_ns_ > epsilon_ns) {
         std::cout << fmt::format("Better by {} exec ns ({} opt), keeping {}.", diff.exec_ns_, diff.optimize_ns_,
                                  FunctionProfile::GetTransformsStr(prev.transforms_))

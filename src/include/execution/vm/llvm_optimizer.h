@@ -32,6 +32,7 @@ class ProfilerControls {
   uint64_t num_iterations_left_{0};
   bool should_agg_{false};
   bool should_print_agg_{false};
+  bool should_print_fragment_{false};
 };
 
 struct FunctionTransform {
@@ -120,6 +121,8 @@ class FunctionProfile {
   common::ManagedPointer<MetadataAgg> GetCombinedAgg() { return common::ManagedPointer(&combined_agg_); }
 
   const std::vector<FunctionTransform> &GetProfileLevelTransforms() const { return transforms_; }
+
+  void PrintModule();
 
   static std::string GetTransformsStr(const std::vector<FunctionTransform> &transforms) {
     std::string blah{"["};
