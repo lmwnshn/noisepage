@@ -45,12 +45,12 @@ struct FunctionTransform {
 /** Metadata for each function. */
 struct FunctionMetadata {
   // TODO(WAN): Break out counters?
-  std::string ir_;                             ///< The IR of the function.
-  int64_t inst_count_;                         ///< The instruction count of the function.
-  int64_t optimize_ns_;                        ///< Time taken to optimize the function.
-  int64_t exec_ns_;                            ///< Time taken to run the function.
-  OptimizationStrategy strategy_;              ///< The strategy used to optimize this function.
-  std::vector<FunctionTransform> transforms_;  ///< The transforms applied to optimize this function. TODO(WAN): space
+  std::string ir_{""};                                         ///< The IR of the function.
+  int64_t inst_count_{0};                                      ///< The instruction count of the function.
+  int64_t optimize_ns_{0};                                     ///< Time taken to optimize the function.
+  int64_t exec_ns_{0};                                         ///< Time taken to run the function.
+  OptimizationStrategy strategy_{OptimizationStrategy::NOOP};  ///< The strategy used to optimize this function.
+  std::vector<FunctionTransform> transforms_{};  ///< The transforms applied to optimize this function. TODO(WAN): space
 
   bool operator==(const FunctionMetadata &other) const {
     return ir_ == other.ir_ && inst_count_ == other.inst_count_ && optimize_ns_ == other.optimize_ns_ &&
@@ -120,6 +120,16 @@ class FunctionProfile {
   common::ManagedPointer<MetadataAgg> GetCombinedAgg() { return common::ManagedPointer(&combined_agg_); }
 
   const std::vector<FunctionTransform> &GetProfileLevelTransforms() const { return transforms_; }
+
+  static std::string GetTransformsStr(const std::vector<FunctionTransform> &transforms) {
+    std::string blah{"["};
+    for (const auto &transform : transforms) {
+      blah += transform.name_ + ";";
+    }
+    blah += "]";
+    return blah;
+  }
+
   void SetProfileLevelTransforms(std::vector<FunctionTransform> transforms);
   uint64_t GetIterationTransformCount() const { return iteration_transform_count_; }
   void IncrementIterationTransformCount() { iteration_transform_count_++; }
@@ -165,6 +175,7 @@ class FunctionOptimizer {
 
  private:
   std::vector<FunctionTransform> GetTransforms(const std::string &func_name, OptimizationStrategy strategy,
+                                               OptimizationStrategy prev_strategy,
                                                common::ManagedPointer<FunctionProfile> profile);
 
   void FinalizeStats(common::ManagedPointer<llvm::Module> llvm_module, const LLVMEngineCompilerOptions &options,

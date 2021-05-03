@@ -342,9 +342,9 @@ void FunctionProfile::EndIteration() {
     agg->num_samples_++;
     agg->last_ = sample;
     // min
-    agg->min_.inst_count_ = std::min(agg->min_.inst_count_, sample.inst_count_);
-    agg->min_.optimize_ns_ = std::min(agg->min_.optimize_ns_, sample.optimize_ns_);
-    agg->min_.exec_ns_ = std::min(agg->min_.exec_ns_, sample.exec_ns_);
+    if (sample.exec_ns_ < agg->min_.exec_ns_) {
+      agg->min_ = sample;
+    }
     // mean (no thought was given to numerical stability)
     agg->mean_.inst_count_ = (agg->mean_.inst_count_ * (agg->num_samples_ - 1) + sample.inst_count_) /
                              static_cast<double>(agg->num_samples_);
@@ -353,9 +353,9 @@ void FunctionProfile::EndIteration() {
     agg->mean_.exec_ns_ =
         (agg->mean_.exec_ns_ * (agg->num_samples_ - 1) + sample.exec_ns_) / static_cast<double>(agg->num_samples_);
     // max
-    agg->max_.inst_count_ = std::max(agg->max_.inst_count_, sample.inst_count_);
-    agg->max_.optimize_ns_ = std::max(agg->max_.optimize_ns_, sample.optimize_ns_);
-    agg->max_.exec_ns_ = std::max(agg->max_.exec_ns_, sample.exec_ns_);
+    if (sample.exec_ns_ > agg->max_.exec_ns_) {
+      agg->max_ = sample;
+    }
   };
 
   for (auto &entry : functions_) {
@@ -383,37 +383,37 @@ void FunctionProfile::EndIteration() {
 }
 
 FunctionMetadata FunctionProfile::GetCombinedPrev() const {
-  int64_t total_inst_cnt = 0;
-  int64_t total_opt_ns = 0;
-  int64_t total_exec_ns = 0;
+  FunctionMetadata result;
   for (auto &entry : functions_) {
     bool is_step = std::find(steps_.cbegin(), steps_.cend(), entry.first) != steps_.cend();
     bool is_teardown = std::find(teardowns_.cbegin(), teardowns_.cend(), entry.first) != teardowns_.cend();
     if (is_step || is_teardown) {
       const FunctionMetadata &md = entry.second.prev_;
-      total_inst_cnt += abs(md.inst_count_);
-      total_opt_ns += abs(md.optimize_ns_);
-      total_exec_ns += abs(md.exec_ns_);
+      result.inst_count_ += abs(md.inst_count_);
+      result.optimize_ns_ += abs(md.optimize_ns_);
+      result.exec_ns_ += abs(md.exec_ns_);
+      result.strategy_ = md.strategy_;
+      result.transforms_ = md.transforms_;
     }
   }
-  return {"", total_inst_cnt, total_opt_ns, total_exec_ns, strategy_, transforms_};
+  return result;
 }
 
 FunctionMetadata FunctionProfile::GetCombinedPrevPrev() const {
-  int64_t total_inst_cnt = 0;
-  int64_t total_opt_ns = 0;
-  int64_t total_exec_ns = 0;
+  FunctionMetadata result;
   for (auto &entry : functions_) {
     bool is_step = std::find(steps_.cbegin(), steps_.cend(), entry.first) != steps_.cend();
     bool is_teardown = std::find(teardowns_.cbegin(), teardowns_.cend(), entry.first) != teardowns_.cend();
     if (is_step || is_teardown) {
       const FunctionMetadata &md = entry.second.prev_prev_;
-      total_inst_cnt += abs(md.inst_count_);
-      total_opt_ns += abs(md.optimize_ns_);
-      total_exec_ns += abs(md.exec_ns_);
+      result.inst_count_ += abs(md.inst_count_);
+      result.optimize_ns_ += abs(md.optimize_ns_);
+      result.exec_ns_ += abs(md.exec_ns_);
+      result.strategy_ = md.strategy_;
+      result.transforms_ = md.transforms_;
     }
   }
-  return {"", total_inst_cnt, total_opt_ns, total_exec_ns};
+  return result;
 }
 
 void FunctionProfile::StartAgg() {
@@ -451,7 +451,32 @@ void FunctionOptimizer::Simplify(const common::ManagedPointer<llvm::Module> llvm
 void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm_module,
                                  UNUSED_ATTRIBUTE const LLVMEngineCompilerOptions &options,
                                  const common::ManagedPointer<FunctionProfile> profile) {
-  profile->GetCombinedAgg()->last_.transforms_ = profile->GetCombinedPrev().transforms_;
+  // Check if the previous pass was good.
+  {
+    // This currently picks the minimum execution time always.
+
+    // Evaluate the result of the last time, if it exists.
+    FunctionMetadata default_metadata{};
+    auto agg_min = profile->GetCombinedAgg()->min_;
+    auto prev = profile->GetCombinedPrev();
+    if (prev.transforms_ != agg_min.transforms_ && !(agg_min == default_metadata)) {
+      auto diff = agg_min - prev;
+      const int64_t epsilon_ns = 500;  // If we get better by at least 500 ns, keep it.
+      if (diff.exec_ns_ > epsilon_ns) {
+        std::cout << fmt::format("Better by {} exec ns ({} opt), keeping {}.", diff.exec_ns_, diff.optimize_ns_,
+                                 FunctionProfile::GetTransformsStr(prev.transforms_))
+                  << std::endl;
+        profile->SetProfileLevelTransforms(prev.transforms_);
+      } else {
+        std::cout << fmt::format("Sucks. Change of {} exec ns ({} opt), discarding {} and reverting to {}.",
+                                 diff.exec_ns_, diff.optimize_ns_, FunctionProfile::GetTransformsStr(prev.transforms_),
+                                 FunctionProfile::GetTransformsStr(agg_min.transforms_))
+                  << std::endl;
+        profile->SetProfileLevelTransforms(agg_min.transforms_);
+      }
+    }
+  }
+
   for (llvm::Function &func : *llvm_module) {
     std::string func_name{func.getName()};
     // TODO(WAN): Only prints out functions that we can collect execution times for right now.
@@ -477,7 +502,8 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
 
     // Add passes as determined by the strategy.
     auto strategy = profile->GetStrategy();
-    auto transforms = GetTransforms(func_name, strategy, profile);
+
+    auto transforms = GetTransforms(func_name, strategy, profile->GetCombinedPrev().strategy_, profile);
     std::string applied_transforms_dbg{""};
     for (FunctionTransform &pass : transforms) {
       pass.transform_(function_passes);
@@ -528,17 +554,22 @@ void FunctionOptimizer::FinalizeStats(const common::ManagedPointer<llvm::Module>
 
 std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::string &func_name,
                                                                 const OptimizationStrategy strategy,
-                                                                common::ManagedPointer<FunctionProfile> profile) {
+                                                                const OptimizationStrategy prev_strategy,
+                                                                const common::ManagedPointer<FunctionProfile> profile) {
+  std::vector<FunctionTransform> transforms = profile->GetProfileLevelTransforms();
   switch (strategy) {
     case OptimizationStrategy::NOOP: {
-      profile->SetProfileLevelTransforms({});
-      profile->IncrementIterationTransformCount();
-      return {};
+      if (profile->GetIterationTransformCount() == 0) {
+        profile->SetProfileLevelTransforms(transforms);
+        profile->IncrementIterationTransformCount();
+      }
+      return transforms;
     }
     case OptimizationStrategy::PMENON: {
-      std::vector<FunctionTransform> transforms = {TRANSFORMS[TRANSFORMS_IDX_PMENON]};
-      profile->SetProfileLevelTransforms(transforms);
-      profile->IncrementIterationTransformCount();
+      if (profile->GetIterationTransformCount() == 0) {
+        profile->SetProfileLevelTransforms({TRANSFORMS[TRANSFORMS_IDX_PMENON]});
+        profile->IncrementIterationTransformCount();
+      }
       return transforms;
     }
     case OptimizationStrategy::RANDOM_ADD: {
@@ -548,25 +579,6 @@ std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::strin
       std::vector<FunctionTransform> transforms = profile->GetProfileLevelTransforms();
       // Only do work if this is the first time this iteration (hacks around GetTransform called by every func).
       if (profile->GetIterationTransformCount() == 0) {
-        // Evaluate the result of the last time, if it exists.
-        FunctionMetadata default_metadata{};
-        auto prevprev = profile->GetCombinedPrevPrev();
-        const int64_t epsilon_ns = 500;  // If we get better by at least 500 ns, keep it.
-        if (!transforms.empty() && !(prevprev == default_metadata)) {
-          auto prev = profile->GetCombinedPrev();
-          auto diff = prevprev - prev;
-          if (diff.exec_ns_ > epsilon_ns) {
-            std::cout << fmt::format("Better by {} exec ns ({} opt), keeping {}.", diff.exec_ns_, diff.optimize_ns_,
-                                     transforms.back().name_)
-                      << std::endl;
-          } else {
-            std::cout << fmt::format("Sucks. Change of {} exec ns ({} opt), discarding {}.", diff.exec_ns_,
-                                     diff.optimize_ns_, transforms.back().name_)
-                      << std::endl;
-            transforms.pop_back();
-          }
-        }
-
         // Add a random transform.
         transforms.emplace_back(TRANSFORMS[rng_llvm_only_(gen_)]);
         profile->SetProfileLevelTransforms(transforms);
