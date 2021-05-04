@@ -464,7 +464,6 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
                                  const common::ManagedPointer<FunctionProfile> profile) {
   // Check if the previous pass was good.
   bool was_good = true;
-  bool beam_search_and_change = false;
   if (was_good) {
     // This currently picks the minimum execution time always.
 
@@ -486,15 +485,7 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
                                  FunctionProfile::GetTransformsStr(agg_min.transforms_))
                   << std::endl;
         profile->SetProfileLevelTransforms(agg_min.transforms_);
-        beam_search_and_change = true;
       }
-    }
-  }
-
-  if (beam_search_and_change || beam_search_transforms_.empty()) {
-    beam_search_transforms_.resize(TRANSFORMS_IDX_LAST_LLVM + 1, 0);
-    for (uint64_t i = 0; i <= TRANSFORMS_IDX_LAST_LLVM; i++) {
-      beam_search_transforms_[i] = i;
     }
   }
 
@@ -656,7 +647,7 @@ std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::strin
       }
       return transforms;
     }
-    case OptimizationStrategy::BEAM_SEARCH: {
+    case OptimizationStrategy::RANDOM_DISTINCT: {
       // Select a random index to add, optimize will sort out the min
       std::vector<FunctionTransform> transforms = profile->GetProfileLevelTransforms();
       // Only do work if this is the first time this iteration (hacks around GetTransform called by every func).

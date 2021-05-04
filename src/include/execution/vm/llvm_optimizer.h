@@ -27,7 +27,7 @@ enum class OptimizationStrategy {
   RANDOM_ADD,
   RANDOM_MUTATE,
   RANDOM_GENETIC,
-  BEAM_SEARCH
+  RANDOM_DISTINCT
 };
 
 class ProfilerControls {

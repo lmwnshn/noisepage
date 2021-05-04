@@ -571,7 +571,7 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
 
       // Pick the minimum of all passes, given constraint given in optimize.
       // Repeat this for the specified number of iterations
-      controls.strategy_ = execution::vm::OptimizationStrategy::BEAM_SEARCH;
+      controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_DISTINCT;
       controls.num_iterations_left_ = 250;
       while (controls.num_iterations_left_-- > 1) {
         run_profile_once(controls);
