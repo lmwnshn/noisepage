@@ -439,7 +439,12 @@ void FunctionProfile::PrintModule() {
 // FunctionOptimizer.
 
 FunctionOptimizer::FunctionOptimizer(common::ManagedPointer<llvm::TargetMachine> target_machine)
-    : target_machine_(target_machine), rng_llvm_only_(0, TRANSFORMS_IDX_LAST_LLVM) {}
+    : target_machine_(target_machine), rng_llvm_only_(0, TRANSFORMS_IDX_LAST_LLVM) {
+  beam_search_transforms_.resize(TRANSFORMS_IDX_LAST_LLVM + 1, 0);
+  for (uint64_t i = 0; i <= TRANSFORMS_IDX_LAST_LLVM; i++) {
+    beam_search_transforms_[i] = i;
+  }
+}
 
 void FunctionOptimizer::Simplify(const common::ManagedPointer<llvm::Module> llvm_module,
                                  UNUSED_ATTRIBUTE const LLVMEngineCompilerOptions &options,
@@ -459,6 +464,7 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
                                  const common::ManagedPointer<FunctionProfile> profile) {
   // Check if the previous pass was good.
   bool was_good = true;
+  bool beam_search_and_change = false;
   if (was_good) {
     // This currently picks the minimum execution time always.
 
@@ -480,7 +486,15 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
                                  FunctionProfile::GetTransformsStr(agg_min.transforms_))
                   << std::endl;
         profile->SetProfileLevelTransforms(agg_min.transforms_);
+        beam_search_and_change = true;
       }
+    }
+  }
+
+  if (beam_search_and_change || beam_search_transforms_.empty()) {
+    beam_search_transforms_.resize(TRANSFORMS_IDX_LAST_LLVM + 1, 0);
+    for (uint64_t i = 0; i <= TRANSFORMS_IDX_LAST_LLVM; i++) {
+      beam_search_transforms_[i] = i;
     }
   }
 
@@ -614,6 +628,44 @@ std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::strin
         // Mutate a random transform.
         uint64_t mutate_idx = dist(gen_);
         transforms[mutate_idx] = TRANSFORMS[rng_llvm_only_(gen_)];
+        profile->SetProfileLevelTransforms(transforms);
+        profile->IncrementIterationTransformCount();
+      }
+      return transforms;
+    }
+    case OptimizationStrategy::RANDOM_GENETIC: {
+      std::vector<FunctionTransform> transforms = profile->GetProfileLevelTransforms();
+      if (profile->GetIterationTransformCount() == 0) {
+        std::uniform_int_distribution<uint32_t> dist(1, 4);
+        uint32_t choice = dist(gen_);
+        std::uniform_int_distribution<uint32_t> idx_dist(0, transforms.size() - 1);
+        // Mutate a random transform.
+        uint64_t choice_idx = idx_dist(gen_);
+        if (choice == 1 && !transforms.empty()) {
+          // Delete a transform
+          transforms.erase(transforms.begin() + choice_idx);
+        } else if (choice == 2 && !transforms.empty()) {
+          // Mutate a transform
+          transforms[choice_idx] = TRANSFORMS[rng_llvm_only_(gen_)];
+        } else if (choice == 3){
+          // Add a transform
+          transforms.emplace_back(TRANSFORMS[rng_llvm_only_(gen_)]);
+        }
+        profile->SetProfileLevelTransforms(transforms);
+        profile->IncrementIterationTransformCount();
+      }
+      return transforms;
+    }
+    case OptimizationStrategy::BEAM_SEARCH: {
+      // Select a random index to add, optimize will sort out the min
+      std::vector<FunctionTransform> transforms = profile->GetProfileLevelTransforms();
+      // Only do work if this is the first time this iteration (hacks around GetTransform called by every func).
+      if (profile->GetIterationTransformCount() == 0 && !beam_search_transforms_.empty()) {
+        // Add a random previously unselected transform.
+        std::uniform_int_distribution<uint32_t> dist(0, beam_search_transforms_.size() - 1);
+        uint32_t choice = dist(gen_);
+        transforms.emplace_back(TRANSFORMS[beam_search_transforms_[choice]]);
+        beam_search_transforms_.erase(beam_search_transforms_.begin() + choice);
         profile->SetProfileLevelTransforms(transforms);
         profile->IncrementIterationTransformCount();
       }

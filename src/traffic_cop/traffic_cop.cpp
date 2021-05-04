@@ -558,6 +558,27 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
       controls.should_print_agg_ = true;
       controls.should_print_fragment_ = true;
       run_profile_once(controls);
+
+      // Randomly add, delete, or mutate.
+      controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_GENETIC;
+      controls.num_iterations_left_ = 250;
+      while (controls.num_iterations_left_-- > 1) {
+        run_profile_once(controls);
+      }
+      controls.should_print_agg_ = true;
+      controls.should_print_fragment_ = true;
+      run_profile_once(controls);
+
+      // Pick the minimum of all passes, given constraint given in optimize.
+      // Repeat this for the specified number of iterations
+      controls.strategy_ = execution::vm::OptimizationStrategy::BEAM_SEARCH;
+      controls.num_iterations_left_ = 250;
+      while (controls.num_iterations_left_-- > 1) {
+        run_profile_once(controls);
+      }
+      controls.should_print_agg_ = true;
+      controls.should_print_fragment_ = true;
+      run_profile_once(controls);
     }
   }
 

@@ -3,6 +3,7 @@
 #include <functional>
 #include <random>
 #include <string>
+#include <unordered_map>
 
 #include "common/managed_pointer.h"
 
@@ -25,6 +26,8 @@ enum class OptimizationStrategy {
   NOOP,
   RANDOM_ADD,
   RANDOM_MUTATE,
+  RANDOM_GENETIC,
+  BEAM_SEARCH
 };
 
 class ProfilerControls {
@@ -193,6 +196,7 @@ class FunctionOptimizer {
   static const uint64_t TRANSFORMS_IDX_PMENON;     ///< Index of Prashanth's hand-picked transform.
 
   const common::ManagedPointer<llvm::TargetMachine> target_machine_;
+  std::vector<uint64_t> beam_search_transforms_;
 
   std::random_device rd_{};
   std::mt19937 gen_{rd_()};
