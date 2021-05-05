@@ -46,7 +46,8 @@ Module::Module(std::unique_ptr<BytecodeModule> bytecode_module, std::unique_ptr<
     : bytecode_module_(std::move(bytecode_module)),
       jit_module_(std::move(llvm_module)),
       functions_(std::make_unique<std::atomic<void *>[]>(bytecode_module_->GetFunctionCount())),
-      bytecode_trampolines_(std::make_unique<Trampoline[]>(bytecode_module_->GetFunctionCount())) {
+      bytecode_trampolines_(std::make_unique<Trampoline[]>(bytecode_module_->GetFunctionCount())),
+      profile_(std::make_unique<FunctionProfile>()) {
   // Create the trampolines for all bytecode functions
   for (const auto &func : bytecode_module_->GetFunctionsInfo()) {
     CreateFunctionTrampoline(func.GetId());
