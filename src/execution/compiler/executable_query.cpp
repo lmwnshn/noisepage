@@ -220,7 +220,7 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
     }
     profile->SetNumIterationsLeft(controls.num_iterations_left_);
     fragment->Run(query_state.get(), mode);
-    profile->EndIteration();
+    profile->EndIteration(controls.is_baseline_);
 
     std::string strat = "wtf";
     switch (controls.strategy_) {

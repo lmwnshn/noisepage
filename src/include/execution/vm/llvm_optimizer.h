@@ -37,6 +37,7 @@ class ProfilerControls {
   bool should_agg_{false};
   bool should_print_agg_{false};
   bool should_print_fragment_{false};
+  bool is_baseline_{false};
 };
 
 struct FunctionTransform {
@@ -104,7 +105,7 @@ class FunctionProfile {
   bool IsAgg() const { return should_update_agg_; }
 
   void SetNumIterationsLeft(uint64_t num_iterations_left) { num_iterations_left_ = num_iterations_left; }
-  void EndIteration();
+  void EndIteration(bool is_baseline);
 
   void RegisterSteps(const std::vector<std::string> &steps) { steps_ = steps; }
   void RegisterTeardowns(const std::vector<std::string> &teardowns) { teardowns_ = teardowns; }

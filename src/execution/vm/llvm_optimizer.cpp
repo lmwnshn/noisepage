@@ -328,7 +328,7 @@ std::string FunctionMetadata::ToStrOnlyInputTransforms() const {
 
 // FunctionProfile.
 
-void FunctionProfile::EndIteration() {
+void FunctionProfile::EndIteration(bool is_baseline) {
   if (should_update_agg_) {
     auto init_agg = [](MetadataAgg *agg, const FunctionMetadata &sample) {
       agg->num_samples_ = 1;
@@ -337,6 +337,17 @@ void FunctionProfile::EndIteration() {
       agg->min_ = sample;
       agg->mean_ = sample;
       agg->max_ = sample;
+    };
+
+    auto init_agg_baseline = [](MetadataAgg *agg, const FunctionMetadata &sample) {
+      if (sample.exec_ns_ < agg->min_.exec_ns_) {
+        agg->num_samples_ = 1;
+        agg->original_ = sample;
+        agg->last_ = sample;
+        agg->min_ = sample;
+        agg->mean_ = sample;
+        agg->max_ = sample;
+      }
     };
 
     auto update_agg = [](MetadataAgg *agg, const FunctionMetadata &sample) {
@@ -366,6 +377,8 @@ void FunctionProfile::EndIteration() {
       if (!is_agg_initialized_) {
         init_agg(&entry.second.agg_, entry.second.prev_);
         // The is_agg_initialized_ flag is set later after updating combined_agg_.
+      } else if (is_baseline) {
+        init_agg_baseline(&entry.second.agg_, entry.second.prev_);
       } else {
         update_agg(&entry.second.agg_, entry.second.prev_);
       }
@@ -374,6 +387,8 @@ void FunctionProfile::EndIteration() {
     if (!is_agg_initialized_) {
       init_agg(&combined_agg_, GetCombinedPrev());
       is_agg_initialized_ = true;
+    } else if (is_baseline) {
+      init_agg_baseline(&combined_agg_, GetCombinedPrev());
     } else {
       update_agg(&combined_agg_, GetCombinedPrev());
     }

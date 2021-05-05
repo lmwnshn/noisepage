@@ -545,23 +545,22 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
       execution::vm::ProfilerControls controls;
       controls.num_iterations_left_ = 350;
       // Get a baseline.
-
+      controls.should_agg_ = true;
+      controls.is_baseline_ = true;
       bool pmenon = settings_manager_->GetBool(settings::Param::pmenon_enable);
       if (pmenon) {
         controls.strategy_ = execution::vm::OptimizationStrategy::PMENON;
       } else {
         controls.strategy_ = execution::vm::OptimizationStrategy::NOOP;
       }
-      std::cout << "PASS MARKER: BASELINE WARMUP" << std::endl;
+      std::cout << "PASS MARKER: BASELINE START" << std::endl;
       while (controls.num_iterations_left_-- > 250) {
         run_profile_once(controls);
       }
-      std::cout << "PASS MARKER: BASELINE WARMUP END" << std::endl;
-      controls.should_agg_ = true;
       controls.should_print_fragment_ = true;
-      std::cout << "PASS MARKER: BASELINE START" << std::endl;
       run_profile_once(controls);
       std::cout << "PASS MARKER: BASELINE END" << std::endl;
+      controls.is_baseline_ = false;
       controls.should_print_fragment_ = false;
       // Randomly try things.
       controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_GENETIC;
@@ -573,6 +572,20 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
       std::cout << "PASS MARKER: FINAL RESULT START" << std::endl;
       run_profile_once(controls);
       std::cout << "PASS MARKER: FINAL RESULT END" << std::endl;
+      // |--| AGG DATA.
+      //|----| Agg num_samples: 250
+      //|----| Agg original: [87 insts, 114659 opt ns, 2185798 exec ns] []
+      //|----| Agg last: [87 insts, 224511 opt ns, 2213386 exec ns] [gvn;]
+      //|----| Agg min: [87 insts, 128385 opt ns, 2173703 exec ns] []
+      //|----| Agg mean: [78 insts, 170828 opt ns, 2230008 exec ns]
+      //|----| Agg max: [87 insts, 123454 opt ns, 2657087 exec ns] [die;]
+      // |--| AGG DATA.
+      //|----| Agg num_samples: 250
+      //|----| Agg original: [87 insts, 116124 opt ns, 2141137 exec ns] [aggressive-instcombine;reassociate;gvn;simplifycfg;adce;simplifycfg;]
+      //|----| Agg last: [87 insts, 121410 opt ns, 2246527 exec ns] []
+      //|----| Agg min: [87 insts, 122402 opt ns, 2140615 exec ns] [dce;]
+      //|----| Agg mean: [80 insts, 159024 opt ns, 2334915 exec ns]
+      //|----| Agg max: [87 insts, 126150 opt ns, 4140246 exec ns] []
     }
 
     exec_query->ResetFragmentProfiles();
