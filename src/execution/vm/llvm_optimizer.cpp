@@ -476,7 +476,6 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
     auto prev = profile->GetCombinedPrev();
     if (!(prev == default_metadata) && !(prevprev == default_metadata)) {
       if (prev == aggmin) {
-#define NOPRINT
 #ifndef NOPRINT
         std::cout << fmt::format("|----| (Pre-strategy) Faster by {} exec ns ({} opt), keeping {}.",
                                  prevprev.exec_ns_ - prev.exec_ns_, prev.optimize_ns_,

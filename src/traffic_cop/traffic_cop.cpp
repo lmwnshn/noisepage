@@ -544,7 +544,6 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
     {
       execution::vm::ProfilerControls controls;
       controls.num_iterations_left_ = 250;
-      controls.should_agg_ = true;
       // Get a baseline.
 
       bool pmenon = settings_manager_->GetBool(settings::Param::pmenon_enable);
@@ -554,6 +553,12 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
         controls.strategy_ = execution::vm::OptimizationStrategy::NOOP;
       }
       controls.should_print_fragment_ = true;
+      std::cout << "PASS MARKER: BASELINE WARMUP" << std::endl;
+      run_profile_once(controls);
+      run_profile_once(controls);
+      run_profile_once(controls);
+      std::cout << "PASS MARKER: BASELINE WARMUP END" << std::endl;
+      controls.should_agg_ = true;
       std::cout << "PASS MARKER: BASELINE START" << std::endl;
       run_profile_once(controls);
       std::cout << "PASS MARKER: BASELINE END" << std::endl;
