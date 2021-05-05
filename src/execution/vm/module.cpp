@@ -280,7 +280,7 @@ void Module::CompileJIT(bool recompile_ok) {
 
   // JIT the module.
   LLVMEngineCompilerOptions options;
-  jit_module_ = LLVMEngine::Compile(*bytecode_module_, options, common::ManagedPointer(&profile_));
+  jit_module_ = LLVMEngine::Compile(*bytecode_module_, options, common::ManagedPointer(profile_));
 
   // JIT completed successfully. For each function in the module, pull out its
   // compiled implementation into the function cache, atomically replacing any

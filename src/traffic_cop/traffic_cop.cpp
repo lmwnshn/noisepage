@@ -548,38 +548,23 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
       // Get a baseline.
       controls.strategy_ = execution::vm::OptimizationStrategy::PMENON;
       controls.should_print_fragment_ = true;
+      std::cout << "PASS MARKER: BASELINE START" << std::endl;
       run_profile_once(controls);
+      std::cout << "PASS MARKER: BASELINE END" << std::endl;
       controls.should_print_fragment_ = false;
-      // Randomly add.
-      controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_MUTATE;
-      while (controls.num_iterations_left_-- > 1) {
-        run_profile_once(controls);
-      }
-      controls.should_print_agg_ = true;
-      controls.should_print_fragment_ = true;
-      run_profile_once(controls);
-
-      // Randomly add, delete, or mutate.
+      // Randomly try things.
       controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_GENETIC;
-      controls.num_iterations_left_ = 250;
       while (controls.num_iterations_left_-- > 1) {
         run_profile_once(controls);
       }
       controls.should_print_agg_ = true;
       controls.should_print_fragment_ = true;
+      std::cout << "PASS MARKER: FINAL RESULT START" << std::endl;
       run_profile_once(controls);
-
-      // Pick the minimum of all passes, given constraint given in optimize.
-      // Repeat this for the specified number of iterations
-      controls.strategy_ = execution::vm::OptimizationStrategy::RANDOM_DISTINCT;
-      controls.num_iterations_left_ = 250;
-      while (controls.num_iterations_left_-- > 1) {
-        run_profile_once(controls);
-      }
-      controls.should_print_agg_ = true;
-      controls.should_print_fragment_ = true;
-      run_profile_once(controls);
+      std::cout << "PASS MARKER: FINAL RESULT END" << std::endl;
     }
+
+    exec_query->ResetFragmentProfiles();
   }
 
   try {

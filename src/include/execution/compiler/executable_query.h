@@ -97,6 +97,8 @@ class ExecutableQuery {
 
     void PrintFragment();
 
+    void ResetFragment();
+
    private:
     // The functions that must be run (in the provided order) to execute this
     // query fragment.
@@ -147,7 +149,10 @@ class ExecutableQuery {
   /**
    * Execute the query under profiling, then recompile the query.
    */
-  void RunProfileRecompile(common::ManagedPointer<exec::ExecutionContext> exec_ctx, const vm::ProfilerControls &controls);
+  void RunProfileRecompile(common::ManagedPointer<exec::ExecutionContext> exec_ctx,
+                           const vm::ProfilerControls &controls);
+
+  void ResetFragmentProfiles();
 
   /**
    * @return The physical plan this executable query implements.

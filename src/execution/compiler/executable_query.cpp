@@ -76,6 +76,8 @@ common::ManagedPointer<vm::FunctionProfile> ExecutableQuery::Fragment::GetFuncti
 
 void ExecutableQuery::Fragment::PrintFragment() { GetFunctionProfile()->PrintModule(); }
 
+void ExecutableQuery::Fragment::ResetFragment() { module_->ResetProfile(); }
+
 //===----------------------------------------------------------------------===//
 //
 // Executable Query
@@ -248,6 +250,12 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
 
   // All profiling runs must abort!
   exec_ctx->GetTxn()->SetMustAbort();
+}
+
+void ExecutableQuery::ResetFragmentProfiles() {
+  for (auto &fragment : fragments_) {
+    fragment->ResetFragment();
+  }
 }
 
 }  // namespace noisepage::execution::compiler

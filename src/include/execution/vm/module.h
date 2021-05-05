@@ -100,7 +100,7 @@ class Module {
    */
   const BytecodeModule *GetBytecodeModule() const { return bytecode_module_.get(); }
 
-  common::ManagedPointer<FunctionProfile> GetFunctionProfile() { return common::ManagedPointer(&profile_); }
+  common::ManagedPointer<FunctionProfile> GetFunctionProfile() { return common::ManagedPointer(profile_); }
 
   /**
    * Recompile the JIT module.
@@ -108,6 +108,8 @@ class Module {
    * @warning This absolutely should not be called unless you are sure that the JIT module is not currently in use.
    */
   void DangerousRecompile() { CompileJIT(true); }
+
+  void ResetProfile() { profile_ = std::make_unique<FunctionProfile>(); }
 
  private:
   friend class VM;                            // For the VM to access raw bytecode.
@@ -186,7 +188,7 @@ class Module {
   std::once_flag compiled_flag_;
 
   /// Profiling information, if any is available. This is used in recompiles.
-  FunctionProfile profile_;
+  std::unique_ptr<FunctionProfile> profile_;
 };
 
 // ---------------------------------------------------------
@@ -201,7 +203,7 @@ namespace detail {
 inline void CopyAll(UNUSED_ATTRIBUTE uint8_t *buffer) {}
 
 template <typename HeadT, typename... RestT>
-inline void CopyAll(uint8_t *buffer, const HeadT &head, const RestT &... rest) {
+inline void CopyAll(uint8_t *buffer, const HeadT &head, const RestT &...rest) {
   std::memcpy(buffer, reinterpret_cast<const uint8_t *>(&head), sizeof(head));
   CopyAll(buffer + sizeof(head), rest...);
 }
