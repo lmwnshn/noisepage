@@ -329,54 +329,54 @@ std::string FunctionMetadata::ToStrOnlyInputTransforms() const {
 // FunctionProfile.
 
 void FunctionProfile::EndIteration() {
-  auto init_agg = [](MetadataAgg *agg, const FunctionMetadata &sample) {
-    agg->num_samples_ = 1;
-    agg->original_ = sample;
-    agg->last_ = sample;
-    agg->min_ = sample;
-    agg->mean_ = sample;
-    agg->max_ = sample;
-  };
-
-  auto update_agg = [](MetadataAgg *agg, const FunctionMetadata &sample) {
-    agg->num_samples_++;
-    agg->last_ = sample;
-    // min
-    if (sample.exec_ns_ < agg->min_.exec_ns_) {
+  if (should_update_agg_) {
+    auto init_agg = [](MetadataAgg *agg, const FunctionMetadata &sample) {
+      agg->num_samples_ = 1;
+      agg->original_ = sample;
+      agg->last_ = sample;
       agg->min_ = sample;
-    }
-    // mean (no thought was given to numerical stability)
-    agg->mean_.inst_count_ = (agg->mean_.inst_count_ * (agg->num_samples_ - 1) + sample.inst_count_) /
-                             static_cast<double>(agg->num_samples_);
-    agg->mean_.optimize_ns_ = (agg->mean_.optimize_ns_ * (agg->num_samples_ - 1) + sample.optimize_ns_) /
-                              static_cast<double>(agg->num_samples_);
-    agg->mean_.exec_ns_ =
-        (agg->mean_.exec_ns_ * (agg->num_samples_ - 1) + sample.exec_ns_) / static_cast<double>(agg->num_samples_);
-    // max
-    if (sample.exec_ns_ > agg->max_.exec_ns_) {
+      agg->mean_ = sample;
       agg->max_ = sample;
-    }
-  };
+    };
 
-  for (auto &entry : functions_) {
-    entry.second.prev_prev_ = entry.second.prev_;
-    entry.second.prev_ = entry.second.curr_;
+    auto update_agg = [](MetadataAgg *agg, const FunctionMetadata &sample) {
+      agg->num_samples_++;
+      agg->last_ = sample;
+      // min
+      if (sample.exec_ns_ < agg->min_.exec_ns_) {
+        agg->min_ = sample;
+      }
+      // mean (no thought was given to numerical stability)
+      agg->mean_.inst_count_ = (agg->mean_.inst_count_ * (agg->num_samples_ - 1) + sample.inst_count_) /
+                               static_cast<double>(agg->num_samples_);
+      agg->mean_.optimize_ns_ = (agg->mean_.optimize_ns_ * (agg->num_samples_ - 1) + sample.optimize_ns_) /
+                                static_cast<double>(agg->num_samples_);
+      agg->mean_.exec_ns_ =
+          (agg->mean_.exec_ns_ * (agg->num_samples_ - 1) + sample.exec_ns_) / static_cast<double>(agg->num_samples_);
+      // max
+      if (sample.exec_ns_ > agg->max_.exec_ns_) {
+        agg->max_ = sample;
+      }
+    };
 
-    if (should_update_agg_) {
+    for (auto &entry : functions_) {
+      entry.second.prev_prev_ = entry.second.prev_;
+      entry.second.prev_ = entry.second.curr_;
+
       if (!is_agg_initialized_) {
         init_agg(&entry.second.agg_, entry.second.prev_);
         // The is_agg_initialized_ flag is set later after updating combined_agg_.
       } else {
         update_agg(&entry.second.agg_, entry.second.prev_);
       }
+      entry.second.curr_ = FunctionMetadata{};
     }
-    entry.second.curr_ = FunctionMetadata{};
-  }
-  if (!is_agg_initialized_) {
-    init_agg(&combined_agg_, GetCombinedPrev());
-    is_agg_initialized_ = true;
-  } else {
-    update_agg(&combined_agg_, GetCombinedPrev());
+    if (!is_agg_initialized_) {
+      init_agg(&combined_agg_, GetCombinedPrev());
+      is_agg_initialized_ = true;
+    } else {
+      update_agg(&combined_agg_, GetCombinedPrev());
+    }
   }
 
   iteration_transform_count_ = 0;
