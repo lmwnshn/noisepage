@@ -55,6 +55,7 @@ struct FunctionMetadata {
   int64_t optimize_ns_{0};                                     ///< Time taken to optimize the function.
   int64_t exec_ns_{0};                                         ///< Time taken to run the function.
   OptimizationStrategy strategy_{OptimizationStrategy::NOOP};  ///< The strategy used to optimize this function.
+  std::vector<FunctionTransform> input_transforms_{};
   std::vector<FunctionTransform> transforms_{};  ///< The transforms applied to optimize this function. TODO(WAN): space
 
   bool operator==(const FunctionMetadata &other) const {
@@ -72,7 +73,7 @@ struct FunctionMetadata {
 
   std::string ToStrLong() const;
   std::string ToStrShort() const;
-  std::string ToStrOnlyTransforms() const;
+  std::string ToStrOnlyInputTransforms() const;
 };
 
 /**

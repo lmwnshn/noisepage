@@ -310,16 +310,16 @@ const uint64_t FunctionOptimizer::TRANSFORMS_IDX_PMENON =
 
 // FunctionMetadata.
 
-std::string FunctionMetadata::ToStrLong() const { return ToStrShort() + " " + ToStrOnlyTransforms(); }
+std::string FunctionMetadata::ToStrLong() const { return ToStrShort() + " " + ToStrOnlyInputTransforms(); }
 
 std::string FunctionMetadata::ToStrShort() const {
   return fmt::format("[{} insts, {} opt ns, {} exec ns]", inst_count_, optimize_ns_, exec_ns_);
 }
 
-std::string FunctionMetadata::ToStrOnlyTransforms() const {
+std::string FunctionMetadata::ToStrOnlyInputTransforms() const {
   // TODO(WAN): stringstreamblablabla
   std::string result{"["};
-  for (const auto &transform : transforms_) {
+  for (const auto &transform : input_transforms_) {
     result += transform.name_ + ";";
   }
   result += "]";
@@ -393,6 +393,7 @@ FunctionMetadata FunctionProfile::GetCombinedPrev() const {
       result.optimize_ns_ += abs(md.optimize_ns_);
       result.exec_ns_ += abs(md.exec_ns_);
       result.strategy_ = md.strategy_;
+      result.input_transforms_ = md.input_transforms_;
       result.transforms_ = md.transforms_;
     }
   }
@@ -410,6 +411,7 @@ FunctionMetadata FunctionProfile::GetCombinedPrevPrev() const {
       result.optimize_ns_ += abs(md.optimize_ns_);
       result.exec_ns_ += abs(md.exec_ns_);
       result.strategy_ = md.strategy_;
+      result.input_transforms_ = md.input_transforms_;
       result.transforms_ = md.transforms_;
     }
   }
@@ -469,25 +471,33 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
 
     // Evaluate the result of the last time, if it exists.
     FunctionMetadata default_metadata{};
-    auto agg_min = profile->GetCombinedAgg()->min_;
+    auto aggmin = profile->GetCombinedAgg()->min_;
     auto prev = profile->GetCombinedPrev();
-    if (prev.transforms_ != agg_min.transforms_ && !(agg_min == default_metadata)) {
-      auto diff = agg_min - prev;
-      const int64_t epsilon_ns = 5000;  // If we get better by at least epsilon ns, keep it.
-      if (diff.exec_ns_ > epsilon_ns) {
-        std::cout << fmt::format("Better by {} exec ns ({} opt), keeping {}.", diff.exec_ns_, diff.optimize_ns_,
+    if (prev.transforms_ != aggmin.transforms_ && !(aggmin == default_metadata)) {
+      auto pct = static_cast<double>(prev.exec_ns_ - aggmin.exec_ns_) / aggmin.exec_ns_;
+      double epsilon_pct = -0.05;  // At least 5% faster AND 500 ns better.
+      int64_t epsilon_ns = -500;
+      if (pct < epsilon_pct && (prev.exec_ns_ - aggmin.exec_ns_) < epsilon_ns) {
+        std::cout << fmt::format("|----| (Pre-strategy) Better by {} exec ns ({} opt), keeping {}.",
+                                 prev.exec_ns_ - aggmin.exec_ns_, prev.optimize_ns_,
                                  FunctionProfile::GetTransformsStr(prev.transforms_))
                   << std::endl;
         profile->SetProfileLevelTransforms(prev.transforms_);
       } else {
-        std::cout << fmt::format("Sucks. Change of {} exec ns ({} opt), discarding {} and reverting to {}.",
-                                 diff.exec_ns_, diff.optimize_ns_, FunctionProfile::GetTransformsStr(prev.transforms_),
-                                 FunctionProfile::GetTransformsStr(agg_min.transforms_))
-                  << std::endl;
-        profile->SetProfileLevelTransforms(agg_min.transforms_);
+        std::cout
+            << fmt::format(
+                   "|----| (Pre-strategy) Sucks. Change of {} exec ns ({} opt), discarding {} and reverting to {}.",
+                   prev.exec_ns_ - aggmin.exec_ns_, prev.optimize_ns_,
+                   FunctionProfile::GetTransformsStr(prev.transforms_),
+                   FunctionProfile::GetTransformsStr(aggmin.transforms_))
+            << std::endl;
+        profile->SetProfileLevelTransforms(aggmin.transforms_);
       }
     }
   }
+  auto strategy = profile->GetStrategy();
+  auto transforms = GetTransforms("", strategy, profile->GetCombinedPrev().strategy_, profile);
+  std::cout << "|----| (Post-strategy) Transforms: " << FunctionProfile::GetTransformsStr(transforms) << std::endl;
 
   for (llvm::Function &func : *llvm_module) {
     std::string func_name{func.getName()};
@@ -497,6 +507,8 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
     bool is_teardown = std::find(profile->GetTeardowns().cbegin(), profile->GetTeardowns().cend(), func_name) !=
                        profile->GetTeardowns().cend();
     bool can_profile = is_step || is_teardown;
+
+    profile->GetCurr(func_name)->input_transforms_ = profile->GetProfileLevelTransforms();
 
     llvm::legacy::FunctionPassManager function_passes(llvm_module.Get());
 
@@ -513,9 +525,7 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
     pm_builder.populateFunctionPassManager(function_passes);
 
     // Add passes as determined by the strategy.
-    auto strategy = profile->GetStrategy();
 
-    auto transforms = GetTransforms(func_name, strategy, profile->GetCombinedPrev().strategy_, profile);
     std::string applied_transforms_dbg{""};
     for (FunctionTransform &pass : transforms) {
       pass.transform_(function_passes);
@@ -632,13 +642,16 @@ std::vector<FunctionTransform> FunctionOptimizer::GetTransforms(const std::strin
         std::uniform_int_distribution<uint32_t> idx_dist(0, transforms.size() - 1);
         // Mutate a random transform.
         uint64_t choice_idx = idx_dist(gen_);
-        if (choice == 1 && !transforms.empty()) {
+        if (transforms.empty()) {
+          // Don't waste time by doing an empty run.
+          transforms.emplace_back(TRANSFORMS[rng_llvm_only_(gen_)]);
+        } else if (choice == 1 && !transforms.empty()) {
           // Delete a transform
           transforms.erase(transforms.begin() + choice_idx);
         } else if (choice == 2 && !transforms.empty()) {
           // Mutate a transform
           transforms[choice_idx] = TRANSFORMS[rng_llvm_only_(gen_)];
-        } else if (choice == 3){
+        } else if (choice == 3) {
           // Add a transform
           transforms.emplace_back(TRANSFORMS[rng_llvm_only_(gen_)]);
         }

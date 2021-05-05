@@ -222,8 +222,6 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
     fragment->Run(query_state.get(), mode);
     profile->EndIteration();
 
-    std::cout << "|--| RECOMPILE." << std::endl;
-
     std::string strat = "wtf";
     switch (controls.strategy_) {
       case vm::OptimizationStrategy::NOOP:
@@ -246,8 +244,8 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
         break;
     }
 
-    std::cout << "|--| Profile strategy " << strat << ", input (combined): " << profile->GetCombinedPrev().ToStrLong()
-              << std::endl;
+    std::cout << "|--| RECOMPILING. Profile strategy " << strat
+              << ", input (combined): " << profile->GetCombinedPrev().ToStrLong() << std::endl;
     fragment->ForceRecompile();
     if (controls.should_print_fragment_) {
       fragment->PrintFragment();
