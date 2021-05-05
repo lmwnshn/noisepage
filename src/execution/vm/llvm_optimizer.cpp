@@ -471,22 +471,20 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
 
     // Evaluate the result of the last time, if it exists.
     FunctionMetadata default_metadata{};
+    auto prevprev = profile->GetCombinedPrevPrev();
     auto aggmin = profile->GetCombinedAgg()->min_;
     auto prev = profile->GetCombinedPrev();
-    if (prev.transforms_ != aggmin.transforms_ && !(aggmin == default_metadata)) {
-      auto pct = static_cast<double>(prev.exec_ns_ - aggmin.exec_ns_) / aggmin.exec_ns_;
-      double epsilon_pct = -0.05;  // At least 5% faster AND 500 ns better.
-      int64_t epsilon_ns = -500;
-      if (pct < epsilon_pct && (prev.exec_ns_ - aggmin.exec_ns_) < epsilon_ns) {
-        std::cout << fmt::format("|----| (Pre-strategy) Better by {} exec ns ({} opt), keeping {}.",
-                                 prev.exec_ns_ - aggmin.exec_ns_, prev.optimize_ns_,
+    if (!(prev == default_metadata) && !(prevprev == default_metadata)) {
+      if (prev == aggmin) {
+        std::cout << fmt::format("|----| (Pre-strategy) Faster by {} exec ns ({} opt), keeping {}.",
+                                 prevprev.exec_ns_ - prev.exec_ns_, prev.optimize_ns_,
                                  FunctionProfile::GetTransformsStr(prev.transforms_))
                   << std::endl;
         profile->SetProfileLevelTransforms(prev.transforms_);
       } else {
         std::cout
             << fmt::format(
-                   "|----| (Pre-strategy) Sucks. Change of {} exec ns ({} opt), discarding {} and reverting to {}.",
+                   "|----| (Pre-strategy) Sucks. Slower by {} exec ns ({} opt), discarding {} and reverting to {}.",
                    prev.exec_ns_ - aggmin.exec_ns_, prev.optimize_ns_,
                    FunctionProfile::GetTransformsStr(prev.transforms_),
                    FunctionProfile::GetTransformsStr(aggmin.transforms_))
