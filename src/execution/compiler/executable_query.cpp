@@ -249,6 +249,9 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
     std::cout << "|--| Profile strategy " << strat << ", input (combined): " << profile->GetCombinedPrev().ToStrLong()
               << std::endl;
     fragment->ForceRecompile();
+    if (controls.should_print_fragment_) {
+      fragment->PrintFragment();
+    }
     if (controls.should_print_agg_) {
       auto agg = profile->GetCombinedAgg();
       std::cout << "|--| AGG DATA." << std::endl;
@@ -258,9 +261,6 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
       std::cout << "|----| Agg min: " << agg->min_.ToStrLong() << std::endl;
       std::cout << "|----| Agg mean: " << agg->mean_.ToStrShort() << std::endl;
       std::cout << "|----| Agg max: " << agg->max_.ToStrLong() << std::endl;
-    }
-    if (controls.should_print_fragment_) {
-      fragment->PrintFragment();
     }
   }
 
