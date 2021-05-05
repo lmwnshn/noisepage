@@ -476,12 +476,16 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
     auto prev = profile->GetCombinedPrev();
     if (!(prev == default_metadata) && !(prevprev == default_metadata)) {
       if (prev == aggmin) {
+#define NOPRINT
+#ifndef NOPRINT
         std::cout << fmt::format("|----| (Pre-strategy) Faster by {} exec ns ({} opt), keeping {}.",
                                  prevprev.exec_ns_ - prev.exec_ns_, prev.optimize_ns_,
                                  FunctionProfile::GetTransformsStr(prev.transforms_))
                   << std::endl;
+#endif
         profile->SetProfileLevelTransforms(prev.transforms_);
       } else {
+#ifndef NOPRINT
         std::cout
             << fmt::format(
                    "|----| (Pre-strategy) Sucks. Slower by {} exec ns ({} opt), discarding {} and reverting to {}.",
@@ -489,13 +493,16 @@ void FunctionOptimizer::Optimize(const common::ManagedPointer<llvm::Module> llvm
                    FunctionProfile::GetTransformsStr(prev.transforms_),
                    FunctionProfile::GetTransformsStr(aggmin.transforms_))
             << std::endl;
+#endif
         profile->SetProfileLevelTransforms(aggmin.transforms_);
       }
     }
   }
   auto strategy = profile->GetStrategy();
   auto transforms = GetTransforms("", strategy, profile->GetCombinedPrev().strategy_, profile);
+#ifndef NOPRINT
   std::cout << "|----| (Post-strategy) Transforms: " << FunctionProfile::GetTransformsStr(transforms) << std::endl;
+#endif
 
   for (llvm::Function &func : *llvm_module) {
     std::string func_name{func.getName()};

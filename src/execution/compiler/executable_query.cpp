@@ -244,8 +244,11 @@ void ExecutableQuery::RunProfileRecompile(common::ManagedPointer<exec::Execution
         break;
     }
 
+#define NOPRINT2
+#ifndef NOPRINT2
     std::cout << "|--| RECOMPILING. Profile strategy " << strat
               << ", input (combined): " << profile->GetCombinedPrev().ToStrLong() << std::endl;
+#endif
     fragment->ForceRecompile();
     if (controls.should_print_fragment_) {
       fragment->PrintFragment();
