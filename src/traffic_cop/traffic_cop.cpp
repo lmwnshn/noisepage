@@ -546,7 +546,13 @@ TrafficCopResult TrafficCop::RunExecutableQuery(const common::ManagedPointer<net
       controls.num_iterations_left_ = 250;
       controls.should_agg_ = true;
       // Get a baseline.
-      controls.strategy_ = execution::vm::OptimizationStrategy::PMENON;
+
+      bool pmenon = settings_manager_->GetBool(settings::Param::pmenon_enable);
+      if (pmenon) {
+        controls.strategy_ = execution::vm::OptimizationStrategy::PMENON;
+      } else {
+        controls.strategy_ = execution::vm::OptimizationStrategy::NOOP;
+      }
       controls.should_print_fragment_ = true;
       std::cout << "PASS MARKER: BASELINE START" << std::endl;
       run_profile_once(controls);

@@ -551,4 +551,13 @@ SETTING_bool(
     true,
     noisepage::settings::Callbacks::NoOp
 )
+
+// Profiling
+SETTING_bool(
+    pmenon_enable,
+    "Whether pmenon is used as a baseline (default: false)",
+    false,
+    true,
+    noisepage::settings::Callbacks::NoOp
+)
     // clang-format on
