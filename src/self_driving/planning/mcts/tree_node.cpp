@@ -80,7 +80,8 @@ common::ManagedPointer<TreeNode> TreeNode::SampleBestChild() {
     children_weights.push_back(child_obj);
   }
 
-  return common::ManagedPointer(children_.at(std::distance(children_weights.begin(), std::max_element(children_weights.begin(), children_weights.end()))));
+  return common::ManagedPointer(children_.at(
+      std::distance(children_weights.begin(), std::max_element(children_weights.begin(), children_weights.end()))));
 }
 
 common::ManagedPointer<TreeNode> TreeNode::SampleMCTSChild() {
@@ -118,8 +119,7 @@ common::ManagedPointer<TreeNode> TreeNode::SampleChild(ChildSamplingType samplin
 common::ManagedPointer<TreeNode> TreeNode::Selection(
     common::ManagedPointer<TreeNode> root, common::ManagedPointer<Pilot> pilot,
     const std::map<action_id_t, std::unique_ptr<AbstractAction>> &action_map,
-    std::unordered_set<action_id_t> *candidate_actions, uint64_t end_segment_index,
-    ChildSamplingType samplingType) {
+    std::unordered_set<action_id_t> *candidate_actions, uint64_t end_segment_index, ChildSamplingType samplingType) {
   common::ManagedPointer<TreeNode> curr;
   std::vector<action_id_t> actions_on_path;
   do {

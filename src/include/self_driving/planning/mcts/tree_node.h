@@ -54,8 +54,7 @@ class TreeNode {
   static common::ManagedPointer<TreeNode> Selection(
       common::ManagedPointer<TreeNode> root, common::ManagedPointer<Pilot> pilot,
       const std::map<action_id_t, std::unique_ptr<AbstractAction>> &action_map,
-      std::unordered_set<action_id_t> *candidate_actions, uint64_t end_segment_index,
-      ChildSamplingType samplingType);
+      std::unordered_set<action_id_t> *candidate_actions, uint64_t end_segment_index, ChildSamplingType samplingType);
 
   /**
    * Expand each child of current node and update its cost and num of visits accordingly
