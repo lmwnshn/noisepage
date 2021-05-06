@@ -40,12 +40,13 @@ MonteCarloTreeSearch::MonteCarloTreeSearch(common::ManagedPointer<Pilot> pilot,
 }
 
 void MonteCarloTreeSearch::BestAction(uint64_t simulation_number,
-                                      std::vector<std::pair<const std::string, catalog::db_oid_t>> *best_action_seq) {
+                                      std::vector<std::pair<const std::string, catalog::db_oid_t>> *best_action_seq,
+                                      ChildSamplingType samplingType) {
   for (uint64_t i = 0; i < simulation_number; i++) {
     std::unordered_set<action_id_t> candidate_actions;
     for (auto action_id : candidate_actions_) candidate_actions.insert(action_id);
     auto vertex =
-        TreeNode::Selection(common::ManagedPointer(root_), pilot_, action_map_, &candidate_actions, end_segment_index_);
+        TreeNode::Selection(common::ManagedPointer(root_), pilot_, action_map_, &candidate_actions, end_segment_index_, samplingType);
 
     vertex->ChildrenRollout(pilot_, forecast_, 0, end_segment_index_, action_map_, candidate_actions);
     vertex->BackPropogate(pilot_, action_map_, use_min_cost_);

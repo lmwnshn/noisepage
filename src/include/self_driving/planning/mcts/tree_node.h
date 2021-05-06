@@ -18,6 +18,7 @@ class WorkloadForecast;
 
 namespace pilot {
 class AbstractAction;
+enum class ChildSamplingType : uint8_t;
 
 /**
  * The pilot processes the query trace predictions by executing them and extracting pipeline features
@@ -48,11 +49,13 @@ class TreeNode {
    * @param candidate_actions candidate actions that can be applied at curent node
    * @param end_segment_index last segment index to be considered in forecast (needed so that when sampled leaf is
    * beyond this index, we repeat the selection process)
+   * @param samplingType Sampling strategy for child selection
    */
   static common::ManagedPointer<TreeNode> Selection(
       common::ManagedPointer<TreeNode> root, common::ManagedPointer<Pilot> pilot,
       const std::map<action_id_t, std::unique_ptr<AbstractAction>> &action_map,
-      std::unordered_set<action_id_t> *candidate_actions, uint64_t end_segment_index);
+      std::unordered_set<action_id_t> *candidate_actions, uint64_t end_segment_index,
+      ChildSamplingType samplingType);
 
   /**
    * Expand each child of current node and update its cost and num of visits accordingly
@@ -92,10 +95,27 @@ class TreeNode {
 
  private:
   /**
+   * Sample child by probabilistically choosing based on weighted distribution
+   * @return Pointer to the child node
+   */
+  common::ManagedPointer<TreeNode> SampleMCTSChild();
+  /**
+   * Sample child randomly
+   * @return Pointer to the child node
+   */
+  common::ManagedPointer<TreeNode> SampleRandomChild();
+  /**
+   * Sample child with the best cost / weight
+   * @return Pointer to the child node
+   */
+  common::ManagedPointer<TreeNode> SampleBestChild();
+
+  /**
    * Sample child based on cost and number of visits
+   * @param samplingType Sampling strategy for child selection
    * @return pointer to sampled child
    */
-  common::ManagedPointer<TreeNode> SampleChild();
+  common::ManagedPointer<TreeNode> SampleChild(ChildSamplingType samplingType);
 
   /**
    * Compute cost as average of children weighted by num of visits of each one

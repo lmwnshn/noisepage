@@ -57,7 +57,33 @@ void TreeNode::UpdateCostAndVisits(uint64_t num_expansion, double leaf_cost, dou
   number_of_visits_ = new_num_visits;
 }
 
-common::ManagedPointer<TreeNode> TreeNode::SampleChild() {
+common::ManagedPointer<TreeNode> TreeNode::SampleRandomChild() {
+  std::uniform_int_distribution<> children_dist(0, children_.size() - 1);
+  std::random_device rd;
+  std::mt19937 device(rd());
+  return common::ManagedPointer(children_.at(children_dist(device)));
+}
+
+common::ManagedPointer<TreeNode> TreeNode::SampleBestChild() {
+  // compute max of children's cost
+  double highest = 0;
+  for (auto &child : children_) highest = std::max(child->cost_, highest);
+
+  // sample based on cost and num of visits of children
+  std::vector<double> children_weights;
+  for (auto &child : children_) {
+    // Adopted from recommended formula in
+    // https://en.wikipedia.org/wiki/Monte_Carlo_tree_search#Exploration_and_exploitation The first additive term was
+    // changed to be the inverse of a normalized value, since smaller cost is preferred
+    auto child_obj = std::pow((highest + EPSILON) / (child->cost_ + EPSILON), 2) +
+                     std::sqrt(2 * std::log(number_of_visits_) / child->number_of_visits_);
+    children_weights.push_back(child_obj);
+  }
+
+  return common::ManagedPointer(children_.at(std::distance(children_weights.begin(), std::max_element(children_weights.begin(), children_weights.end()))));
+}
+
+common::ManagedPointer<TreeNode> TreeNode::SampleMCTSChild() {
   // compute max of children's cost
   double highest = 0;
   for (auto &child : children_) highest = std::max(child->cost_, highest);
@@ -78,17 +104,29 @@ common::ManagedPointer<TreeNode> TreeNode::SampleChild() {
   return common::ManagedPointer(children_.at(children_dist(device)));
 }
 
+common::ManagedPointer<TreeNode> TreeNode::SampleChild(ChildSamplingType samplingType) {
+  switch (samplingType) {
+    case ChildSamplingType::BEST_CHILD:
+      return SampleBestChild();
+    case ChildSamplingType::RANDOM:
+      return SampleRandomChild();
+    case ChildSamplingType::MCTS:
+      return SampleMCTSChild();
+  }
+}
+
 common::ManagedPointer<TreeNode> TreeNode::Selection(
     common::ManagedPointer<TreeNode> root, common::ManagedPointer<Pilot> pilot,
     const std::map<action_id_t, std::unique_ptr<AbstractAction>> &action_map,
-    std::unordered_set<action_id_t> *candidate_actions, uint64_t end_segment_index) {
+    std::unordered_set<action_id_t> *candidate_actions, uint64_t end_segment_index,
+    ChildSamplingType samplingType) {
   common::ManagedPointer<TreeNode> curr;
   std::vector<action_id_t> actions_on_path;
   do {
     curr = root;
     actions_on_path.clear();
     while (!curr->is_leaf_) {
-      curr = curr->SampleChild();
+      curr = curr->SampleChild(samplingType);
       actions_on_path.push_back(curr->current_action_);
     }
   } while (curr->depth_ > end_segment_index);

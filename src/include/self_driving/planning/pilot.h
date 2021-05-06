@@ -59,6 +59,25 @@ class TaskManager;
 
 namespace noisepage::selfdriving {
 namespace pilot {
+
+/**
+ * Describes how a child will be picked while performing best action search using MCTS.
+ */
+enum class ChildSamplingType : uint8_t {
+  /**
+   * Randomly pick a child, irrespective of the associated cost/weight.
+   */
+  RANDOM,
+  /**
+   * Pick the child with the best cost/weight.
+   */
+  BEST_CHILD,
+  /**
+   * Probabilistically pick a child based on a weighted distribution (default MCTS approach).
+   */
+  MCTS
+};
+
 class AbstractAction;
 class MonteCarloTreeSearch;
 class TreeNode;
