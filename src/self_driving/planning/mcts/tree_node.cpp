@@ -113,6 +113,8 @@ common::ManagedPointer<TreeNode> TreeNode::SampleChild(ChildSamplingType samplin
       return SampleRandomChild();
     case ChildSamplingType::MCTS:
       return SampleMCTSChild();
+    default:
+      return SampleMCTSChild();
   }
 }
 
