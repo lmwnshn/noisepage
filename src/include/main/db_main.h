@@ -9,6 +9,7 @@
 #include "common/action_context.h"
 #include "common/dedicated_thread_registry.h"
 #include "common/managed_pointer.h"
+#include "loggers/replication_logger.h"
 #include "messenger/messenger.h"
 #include "metrics/metrics_defs.h"
 #include "metrics/metrics_thread.h"
@@ -419,6 +420,8 @@ class DBMain {
               messenger_layer->GetMessenger(), network_identity_, replication_port_, replication_hosts_path_,
               common::ManagedPointer(empty_buffer_queue));
         }
+        REPLICATION_LOG_INFO(fmt::format("[PID={}] Listening as {} on internal replication port {}.", ::getpid(),
+                                         network_identity_, replication_port_));
       }
 
       std::unique_ptr<storage::LogManager> log_manager = DISABLED;
@@ -544,7 +547,8 @@ class DBMain {
             common::ManagedPointer(metrics_thread), common::ManagedPointer(model_server_manager),
             common::ManagedPointer(settings_manager), common::ManagedPointer(stats_storage),
             common::ManagedPointer(txn_layer->GetTransactionManager()), std::move(util),
-            common::ManagedPointer(task_manager), workload_forecast_interval_, sequence_length_, horizon_length_);
+            common::ManagedPointer(task_manager), common::ManagedPointer(replication_manager),
+            workload_forecast_interval_, sequence_length_, horizon_length_);
         pilot_thread = std::make_unique<selfdriving::PilotThread>(
             common::ManagedPointer(pilot), std::chrono::microseconds{pilot_interval_},
             std::chrono::microseconds{forecast_train_interval_}, pilot_planning_);

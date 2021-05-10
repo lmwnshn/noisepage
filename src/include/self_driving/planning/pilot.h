@@ -21,31 +21,35 @@
 namespace noisepage {
 namespace messenger {
 class Messenger;
-}
+}  // namespace messenger
 
 namespace metrics {
 class MetricsThread;
-}
+}  // namespace metrics
 
 namespace modelserver {
 class ModelServerManager;
-}
+}  // namespace modelserver
 
 namespace optimizer {
 class StatsStorage;
-}
+}  // namespace optimizer
 
 namespace planner {
 class AbstractPlanNode;
-}
+}  // namespace planner
+
+namespace replication {
+class ReplicationManager;
+}  // namespace replication
 
 namespace settings {
 class SettingsManager;
-}
+}  // namespace settings
 
 namespace transaction {
 class TransactionManager;
-}
+}  // namespace transaction
 
 namespace util {
 class QueryExecUtil;
@@ -53,13 +57,14 @@ class QueryExecUtil;
 
 namespace task {
 class TaskManager;
-}
+}  // namespace task
 
 }  // namespace noisepage
 
 namespace noisepage::selfdriving {
 namespace pilot {
 class AbstractAction;
+class MCTSAction;
 class MonteCarloTreeSearch;
 class TreeNode;
 }  // namespace pilot
@@ -121,7 +126,11 @@ class Pilot {
         common::ManagedPointer<optimizer::StatsStorage> stats_storage,
         common::ManagedPointer<transaction::TransactionManager> txn_manager,
         std::unique_ptr<util::QueryExecUtil> query_exec_util, common::ManagedPointer<task::TaskManager> task_manager,
+        common::ManagedPointer<replication::ReplicationManager> replication_manager,
         uint64_t workload_forecast_interval, uint64_t sequence_length, uint64_t horizon_length);
+
+  /** Destructor. */
+  ~Pilot();
 
   /**
    * Get model save path
@@ -187,7 +196,7 @@ class Pilot {
    * Search for and apply the best action for the current timestamp
    * @param best_action_seq pointer to the vector to be filled with the sequence of best actions to take at current time
    */
-  void ActionSearch(std::vector<std::pair<const std::string, catalog::db_oid_t>> *best_action_seq);
+  void ActionSearch(std::vector<pilot::MCTSAction> *best_action_seq);
 
  private:
   /**
@@ -230,11 +239,13 @@ class Pilot {
   common::ManagedPointer<transaction::TransactionManager> txn_manager_;
   std::unique_ptr<util::QueryExecUtil> query_exec_util_;
   common::ManagedPointer<task::TaskManager> task_manager_;
+  common::ManagedPointer<replication::ReplicationManager> replication_manager_;  ///< Possibly DISABLED.
   uint64_t workload_forecast_interval_{1000000};
   uint64_t sequence_length_{10};
   uint64_t horizon_length_{30};
   uint64_t action_planning_horizon_{5};
   uint64_t simulation_number_{20};
+
   friend class noisepage::selfdriving::PilotUtil;
   friend class noisepage::selfdriving::pilot::MonteCarloTreeSearch;
 };

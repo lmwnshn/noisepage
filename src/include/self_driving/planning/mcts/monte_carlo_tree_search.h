@@ -16,6 +16,31 @@ class Pilot;
 
 namespace pilot {
 
+/** A complete action to be taken as part of the MCTS tree search. */
+class MCTSAction {
+ public:
+  /**
+   * Constructor.
+   * @param db_oid          The database that this action should be applied to.
+   * @param action_sql      The SQL string corresponding to the action to be applied.
+   * @param cost            The predicted cost of this action.
+   */
+  MCTSAction(catalog::db_oid_t db_oid, std::string action_sql, double predicted_cost)
+      : db_oid_(db_oid), action_sql_(std::move(action_sql)), predicted_cost_(predicted_cost) {}
+
+  /** @return The database that this action should be applied to. */
+  catalog::db_oid_t GetDatabaseOid() const { return db_oid_; }
+  /** @return The SQL string corresponding to the action to be applied. */
+  const std::string &GetActionSQL() const { return action_sql_; }
+  /** @return The predicted cost of this action. */
+  double GetPredictedCost() const { return predicted_cost_; }
+
+ private:
+  const catalog::db_oid_t db_oid_;  ///< The database that this action should be applied to.
+  const std::string action_sql_;    ///< The SQL string corresponding to the action to be applied.
+  const double predicted_cost_;     ///< The predicted cost of this action.
+};
+
 /**
  * The pilot processes the query trace predictions by executing them and extracting pipeline features
  */
@@ -38,8 +63,7 @@ class MonteCarloTreeSearch {
    * @param best_action_seq
    * @return query string of the best first action as well as the associated database oid
    */
-  void BestAction(uint64_t simulation_number,
-                  std::vector<std::pair<const std::string, catalog::db_oid_t>> *best_action_seq);
+  void BestAction(uint64_t simulation_number, std::vector<MCTSAction> *best_action_seq);
 
  private:
   const common::ManagedPointer<Pilot> pilot_;

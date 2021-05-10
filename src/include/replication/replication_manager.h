@@ -50,10 +50,18 @@ class ReplicationManager {
   virtual bool IsPrimary() const = 0;
   /** @return   True if this is a replica node and false if this is the primary. */
   bool IsReplica() const { return !IsPrimary(); }
+  /** @return   True if this node is the pilot node. */
+  bool IsPilot() const { return identity_ == "pilot"; }
+
   /** @return   This should only be called from the primary node! Return a pointer as the primary recovery manager. */
   common::ManagedPointer<PrimaryReplicationManager> GetAsPrimary();
   /** @return   This should only be called from a replica node! Return a pointer as a replica recovery manager. */
   common::ManagedPointer<ReplicaReplicationManager> GetAsReplica();
+
+  /** @return   The identity of this node on the replication network. */
+  const std::string &GetIdentity() const { return identity_; }
+  /** @return   The replica metadata for the replica with the specified name. */
+  const Replica &GetReplica(const std::string &replica_id) { return replicas_.at(replica_id); }
 
  protected:
   /**
@@ -110,9 +118,10 @@ class ReplicationManager {
    *
    * @param node_name                   The name to assign the node.
    * @param hostname                    The hostname where the node is available.
-   * @param port                        The port where the node is available.
+   * @param internal_port                        The internal port where the node is available for replication.
+   * @param network_port                        The network port where the node is available over psql.
    */
-  void NodeConnect(const std::string &node_name, const std::string &hostname, uint16_t port);
+  void NodeConnect(const std::string &node_name, const std::string &hostname, uint16_t internal_port, uint16_t network_port);
 
   /** @return The connection ID associated with a particular replica. */
   messenger::connection_id_t GetNodeConnection(const std::string &replica_name);

@@ -23,7 +23,7 @@ static constexpr const char *PYTHON3M = "-m";
 static constexpr const char *MODULE_NAME = "script.self_driving.model_server";
 static constexpr const char *MODEL_CONN_ID_NAME = "model-server-conn";
 static constexpr const char *MODEL_TARGET_NAME = "model";
-static constexpr const char *MODEL_IPC_PATH = "model-server-ipc";
+static constexpr const char *MODEL_IPC_PATH = "model-server-ipc-{}";
 static constexpr const char *COVERAGE_COMMAND = "coverage";
 static constexpr const char *COVERAGE_RUN = "run";
 static constexpr const char *COVERAGE_RUNM = "-m";
@@ -88,7 +88,8 @@ ModelServerManager::ModelServerManager(const common::ManagedPointer<messenger::M
         MODEL_SERVER_LOG_WARN("Unknown callback {}", cb_id);
     }
   };
-  router_ = ListenAndMakeConnection(messenger, MODEL_IPC_PATH, msm_handler);
+  router_ =
+      ListenAndMakeConnection(messenger, fmt::format(MODEL_IPC_PATH, messenger_->GetMessengerPort()), msm_handler);
 }
 
 void ModelServerManager::StartModelServer(bool enable_python_coverage) {
@@ -150,7 +151,7 @@ void ModelServerManager::StartModelServer(bool enable_python_coverage) {
       ::_exit(MODEL_SERVER_SUBPROCESS_ERROR);
     }
 #endif
-    std::string ipc_path = MODEL_IPC_PATH;
+    std::string ipc_path = fmt::format(MODEL_IPC_PATH, messenger_->GetMessengerPort());
     // Args to set up Python code coverage then execute model server
     std::string coverage_command = COVERAGE_COMMAND;
     std::string coverage_run = COVERAGE_RUN;

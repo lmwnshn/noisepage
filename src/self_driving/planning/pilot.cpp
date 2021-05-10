@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <memory>
+#include <pqxx/pqxx>  // NOLINT
 #include <utility>
 
 #include "common/action_context.h"
@@ -21,6 +22,8 @@
 #include "optimizer/statistics/stats_storage.h"
 #include "planner/plannodes/abstract_plan_node.h"
 #include "planner/plannodes/output_schema.h"
+#include "replication/replica.h"
+#include "replication/replication_manager.h"
 #include "self_driving/forecasting/workload_forecast.h"
 #include "self_driving/model_server/model_server_manager.h"
 #include "self_driving/planning/mcts/monte_carlo_tree_search.h"
@@ -41,8 +44,9 @@ Pilot::Pilot(std::string model_save_path, std::string forecast_model_save_path,
              common::ManagedPointer<optimizer::StatsStorage> stats_storage,
              common::ManagedPointer<transaction::TransactionManager> txn_manager,
              std::unique_ptr<util::QueryExecUtil> query_exec_util,
-             common::ManagedPointer<task::TaskManager> task_manager, uint64_t workload_forecast_interval,
-             uint64_t sequence_length, uint64_t horizon_length)
+             common::ManagedPointer<task::TaskManager> task_manager,
+             common::ManagedPointer<replication::ReplicationManager> replication_manager,
+             uint64_t workload_forecast_interval, uint64_t sequence_length, uint64_t horizon_length)
     : model_save_path_(std::move(model_save_path)),
       forecast_model_save_path_(std::move(forecast_model_save_path)),
       catalog_(catalog),
@@ -53,11 +57,16 @@ Pilot::Pilot(std::string model_save_path, std::string forecast_model_save_path,
       txn_manager_(txn_manager),
       query_exec_util_(std::move(query_exec_util)),
       task_manager_(task_manager),
+      replication_manager_(replication_manager),
       workload_forecast_interval_(workload_forecast_interval),
       sequence_length_(sequence_length),
       horizon_length_(horizon_length) {
   forecast_ = nullptr;
   while (!model_server_manager_->ModelServerStarted()) {
+  }
+
+  if (replication_manager_ == DISABLED) {
+    SELFDRIVING_LOG_WARN("Replication is disabled. The pilot functionality is single-node.");
   }
 }
 
@@ -75,6 +84,8 @@ std::pair<uint64_t, uint64_t> Pilot::ComputeTimestampDataRange(uint64_t now, boo
 
   return std::make_pair(now - eval_time, now - 1);
 }
+
+Pilot::~Pilot() = default;
 
 void Pilot::PerformForecasterTrain() {
   uint64_t timestamp = metrics::MetricsUtil::Now();
@@ -408,7 +419,7 @@ void Pilot::PerformPlanning() {
   }
 
   // Perform planning
-  std::vector<std::pair<const std::string, catalog::db_oid_t>> best_action_seq;
+  std::vector<pilot::MCTSAction> best_action_seq;
   try {
     Pilot::ActionSearch(&best_action_seq);
   } catch (PilotException &e) {
@@ -422,20 +433,49 @@ void Pilot::PerformPlanning() {
   metrics_thread_->ResumeMetrics();
 }
 
-void Pilot::ActionSearch(std::vector<std::pair<const std::string, catalog::db_oid_t>> *best_action_seq) {
+void Pilot::ActionSearch(std::vector<pilot::MCTSAction> *best_action_seq) {
   auto num_segs = forecast_->GetNumberOfSegments();
   auto end_segment_index = std::min(action_planning_horizon_ - 1, num_segs - 1);
 
-  auto mcst =
+  auto mcts =
       pilot::MonteCarloTreeSearch(common::ManagedPointer(this), common::ManagedPointer(forecast_), end_segment_index);
-  mcst.BestAction(simulation_number_, best_action_seq);
+  mcts.BestAction(simulation_number_, best_action_seq);
   for (uint64_t i = 0; i < best_action_seq->size(); i++) {
     SELFDRIVING_LOG_INFO(fmt::format("Action Selected: Time Interval: {}; Action Command: {} Applied to Database {}", i,
-                                     best_action_seq->at(i).first,
-                                     static_cast<uint32_t>(best_action_seq->at(i).second)));
+                                     best_action_seq->at(i).GetActionSQL(),
+                                     best_action_seq->at(i).GetDatabaseOid().UnderlyingValue()));
   }
-  PilotUtil::ApplyAction(common::ManagedPointer(this), best_action_seq->begin()->first,
-                         best_action_seq->begin()->second);
+  const auto &first_action = best_action_seq->cbegin();
+
+  PilotUtil::ApplyAction(common::ManagedPointer(this), first_action->GetActionSQL(), first_action->GetDatabaseOid());
+  SELFDRIVING_LOG_INFO(fmt::format("Action applied to database {} (cost {}): {}",
+                                   first_action->GetDatabaseOid().UnderlyingValue(), first_action->GetPredictedCost(),
+                                   first_action->GetActionSQL()));
+
+  if (replication_manager_ != DISABLED && !replication_manager_->IsPilot()) {
+    // TODO(WAN): Should a new connection be created every time, or should a long-running connection be held in Pilot?
+    //            If a new connection is created every time, you pay that overhead.
+    //            However, the rate at which actions are actually applied is very small, and we only have 4 connection
+    //            threads by default.
+
+    // Make a connection to the Pilot.
+    // All the actions that this replica's Pilot instance takes will be pushed to the actual Pilot's internal tables.
+    auto &replica = replication_manager_->GetReplica("pilot");
+    SELFDRIVING_LOG_INFO(fmt::format("host={} port={} user={} sslmode=disable application_name=psql",
+                                     replica.GetHostname(), replica.GetNetworkPort(), catalog::DEFAULT_DATABASE));
+    pqxx::connection connection(fmt::format("host={} port={} user={} sslmode=disable application_name=psql",
+                                            replica.GetHostname(), replica.GetNetworkPort(),
+                                            catalog::DEFAULT_DATABASE));
+
+    // TODO(WAN): Convert into a prepared statement.
+    std::string sql = fmt::format("INSERT INTO pilot_actions_applied VALUES ('{}', {}, '{}', {});",
+                                  connection.esc(replication_manager_->GetIdentity()), first_action->GetDatabaseOid(),
+                                  connection.esc(first_action->GetActionSQL()), first_action->GetPredictedCost());
+    pqxx::work txn(connection);
+    txn.exec(sql);
+    txn.commit();
+    SELFDRIVING_LOG_INFO(fmt::format("Ran SQL on pilot: {}", sql));
+  }
 }
 
 void Pilot::ExecuteForecast(std::map<std::pair<execution::query_id_t, execution::pipeline_id_t>,

@@ -36,9 +36,11 @@ msg_id_t ReplicationManager::GetNextMessageId() {
   return next_msg_id;
 }
 
-void ReplicationManager::NodeConnect(const std::string &node_name, const std::string &hostname, uint16_t port) {
+void ReplicationManager::NodeConnect(const std::string &node_name, const std::string &hostname, uint16_t internal_port,
+                                     uint16_t network_port) {
   // Note that creating a Replica will result in a network call.
-  UNUSED_ATTRIBUTE auto result = replicas_.try_emplace(node_name, messenger_, node_name, hostname, port);
+  UNUSED_ATTRIBUTE auto result =
+      replicas_.try_emplace(node_name, messenger_, node_name, hostname, internal_port, network_port);
   NOISEPAGE_ASSERT(result.second, "Failed to connect to a replica?");
 }
 
@@ -67,11 +69,13 @@ void ReplicationManager::BuildReplicationNetwork(const std::string &replication_
   if (!hosts_file.is_open()) {
     throw REPLICATION_EXCEPTION(fmt::format("Unable to open file: {}", replication_hosts_path));
   }
+  uint32_t num_entries = 5;
   std::string line;
   std::string replica_name;
   std::string replica_hostname;
-  uint16_t replica_port;
-  for (int ctr = 0; std::getline(hosts_file, line); ctr = (ctr + 1) % 4) {
+  uint16_t replica_internal_port;
+  uint16_t replica_network_port;
+  for (uint32_t ctr = 0; std::getline(hosts_file, line); ctr = (ctr + 1) % num_entries) {
     switch (ctr) {
       case 0:
         // Ignored line.
@@ -83,14 +87,17 @@ void ReplicationManager::BuildReplicationNetwork(const std::string &replication_
         replica_hostname = line;
         break;
       case 3:
-        replica_port = std::stoi(line);
+        replica_internal_port = std::stoi(line);
+        break;
+      case 4:
+        replica_network_port = std::stoi(line);
         // All information parsed.
         if (identity_ == replica_name) {
           // For our specific identity, check that the port is right.
-          NOISEPAGE_ASSERT(replica_port == port_, "Mismatch of identity/port combo in replica config.");
+          NOISEPAGE_ASSERT(replica_internal_port == port_, "Mismatch of identity/port combo in replica config.");
         } else {
           // Connect to the replica.
-          NodeConnect(replica_name, replica_hostname, replica_port);
+          NodeConnect(replica_name, replica_hostname, replica_internal_port, replica_network_port);
         }
         break;
       default:

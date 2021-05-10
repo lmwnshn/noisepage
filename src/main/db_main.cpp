@@ -55,7 +55,10 @@ void DBMain::TryLoadStartupDDL() {
 }
 
 void DBMain::Run() {
-  TryLoadStartupDDL();
+  if (replication_manager_ != DISABLED && replication_manager_->IsPrimary()) {
+    COMMON_LOG_INFO("Running startup SQL.");
+    TryLoadStartupDDL();
+  }
   NOISEPAGE_ASSERT(network_layer_ != DISABLED, "Trying to run without a NetworkLayer.");
   const auto server = network_layer_->GetServer();
   try {

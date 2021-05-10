@@ -207,6 +207,9 @@ class Messenger : public common::DedicatedThreadTask {
   /** An explicit destructor is necessary because of the unique_ptr around a forward-declared type. */
   ~Messenger() override;
 
+  /** @return The port that the messenger is running on. */
+  uint16_t GetMessengerPort() const { return port_; }
+
   /** Run the main server loop, which dispatches messages received to the MessengerLogic layer. */
   void RunTask() override;
 

@@ -90,6 +90,9 @@ class TreeNode {
    */
   action_id_t GetCurrentAction() { return current_action_; }
 
+  /** @return The predicted cost of this TreeNode. */
+  double GetPredictedCost() const { return cost_; }
+
  private:
   /**
    * Sample child based on cost and number of visits
@@ -141,7 +144,7 @@ class TreeNode {
 
   uint64_t number_of_visits_;  // number of leaf in subtree rooted at node
   std::vector<std::unique_ptr<TreeNode>> children_;
-  double cost_;
+  double cost_;  ///< The predicted cost of this TreeNode.
 };
 }  // namespace pilot
 

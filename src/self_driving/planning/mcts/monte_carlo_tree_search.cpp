@@ -39,8 +39,7 @@ MonteCarloTreeSearch::MonteCarloTreeSearch(common::ManagedPointer<Pilot> pilot,
   root_ = std::make_unique<TreeNode>(nullptr, static_cast<action_id_t>(NULL_ACTION), 0, later_cost);
 }
 
-void MonteCarloTreeSearch::BestAction(uint64_t simulation_number,
-                                      std::vector<std::pair<const std::string, catalog::db_oid_t>> *best_action_seq) {
+void MonteCarloTreeSearch::BestAction(uint64_t simulation_number, std::vector<MCTSAction> *best_action_seq) {
   for (uint64_t i = 0; i < simulation_number; i++) {
     std::unordered_set<action_id_t> candidate_actions;
     for (auto action_id : candidate_actions_) candidate_actions.insert(action_id);
@@ -54,8 +53,9 @@ void MonteCarloTreeSearch::BestAction(uint64_t simulation_number,
   auto curr_node = common::ManagedPointer(root_);
   while (!curr_node->IsLeaf()) {
     auto best_child = curr_node->BestSubtree();
-    best_action_seq->emplace_back(action_map_.at(best_child->GetCurrentAction())->GetSQLCommand(),
-                                  action_map_.at(best_child->GetCurrentAction())->GetDatabaseOid());
+    best_action_seq->emplace_back(action_map_.at(best_child->GetCurrentAction())->GetDatabaseOid(),
+                                  action_map_.at(best_child->GetCurrentAction())->GetSQLCommand(),
+                                  best_child->GetPredictedCost());
     SELFDRIVING_LOG_DEBUG(action_map_.at(best_child->GetCurrentAction())->GetSQLCommand());
     curr_node = best_child;
   }
