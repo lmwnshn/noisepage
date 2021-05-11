@@ -452,6 +452,7 @@ void Pilot::ActionSearch(std::vector<pilot::MCTSAction> *best_action_seq) {
                                    first_action->GetDatabaseOid().UnderlyingValue(), first_action->GetPredictedCost(),
                                    first_action->GetActionSQL()));
 
+#if 0
   if (replication_manager_ != DISABLED && !replication_manager_->IsPilot()) {
     // TODO(WAN): Should a new connection be created every time, or should a long-running connection be held in Pilot?
     //            If a new connection is created every time, you pay that overhead.
@@ -476,6 +477,7 @@ void Pilot::ActionSearch(std::vector<pilot::MCTSAction> *best_action_seq) {
     txn.commit();
     SELFDRIVING_LOG_INFO(fmt::format("Ran SQL on pilot: {}", sql));
   }
+#endif
 }
 
 void Pilot::ExecuteForecast(std::map<std::pair<execution::query_id_t, execution::pipeline_id_t>,
