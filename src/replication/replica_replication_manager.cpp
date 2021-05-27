@@ -21,6 +21,12 @@ void ReplicaReplicationManager::Handle(const messenger::ZmqMessage &zmq_msg, con
   provider_.UpdateOAT(msg.GetOldestActiveTxn(), msg.GetBatchId());
 }
 
+void ReplicaReplicationManager::Handle(const messenger::ZmqMessage &zmq_msg, const NotifyParsedQueryMsg &msg) {
+  REPLICATION_LOG_TRACE(fmt::format("[RECV] NotifyParsedQueryMsg from {}: QUERY {}", zmq_msg.GetRoutingId(),
+                                    msg.GetQueryText()));
+  // TODO(WAN): Submit a task to run and abort on a timer.
+}
+
 void ReplicaReplicationManager::Handle(const messenger::ZmqMessage &zmq_msg, const RecordsBatchMsg &msg) {
   REPLICATION_LOG_TRACE(fmt::format("[RECV] RecordsBatchMsg from {}: ID {} BATCH {}", zmq_msg.GetRoutingId(),
                                     msg.GetMessageId(), msg.GetBatchId()));
@@ -34,6 +40,10 @@ void ReplicaReplicationManager::EventLoop(common::ManagedPointer<messenger::Mess
   switch (msg->GetMessageType()) {
     case ReplicationMessageType::NOTIFY_OAT: {
       Handle(zmq_msg, *msg.CastManagedPointerTo<NotifyOATMsg>());
+      break;
+    }
+    case ReplicationMessageType::NOTIFY_PARSED_QUERY: {
+      Handle(zmq_msg, *msg.CastManagedPointerTo<NotifyParsedQueryMsg>());
       break;
     }
     case ReplicationMessageType::RECORDS_BATCH: {

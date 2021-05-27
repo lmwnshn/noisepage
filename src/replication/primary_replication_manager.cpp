@@ -111,6 +111,21 @@ void PrimaryReplicationManager::NotifyReplicasOfOAT(transaction::timestamp_t old
   }
 }
 
+void PrimaryReplicationManager::NotifyReplicasOfQuery(const std::string &query) {
+  ReplicationMessageMetadata metadata(GetNextMessageId());
+  NotifyParsedQueryMsg msg(metadata, query);
+  REPLICATION_LOG_TRACE(fmt::format("[SEND] QUERY SEEN: {}", msg.GetQueryText()));
+
+  messenger::callback_id_t destination_cb =
+      messenger::Messenger::GetBuiltinCallback(messenger::Messenger::BuiltinCallback::NOOP);
+
+  const msg_id_t msg_id = msg.GetMessageId();
+  const std::string msg_string = msg.Serialize();
+  for (const auto &replica : replicas_) {
+    Send(replica.first, msg_id, msg_string, messenger::CallbackFns::Noop, destination_cb);
+  }
+}
+
 record_batch_id_t PrimaryReplicationManager::GetNextBatchId() {
   record_batch_id_t next_batch_id = next_batch_id_++;
   if (next_batch_id_ == INVALID_RECORD_BATCH_ID) {

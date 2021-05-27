@@ -56,6 +56,12 @@ class PrimaryReplicationManager final : public ReplicationManager {
    */
   void NotifyReplicasOfOAT(transaction::timestamp_t oldest_active_txn);
 
+  /**
+   * Notify all of the replicas that the following query was parsed on the primary.
+   * Note that the query needn't necessarily have been executed.
+   */
+  void NotifyReplicasOfQuery(const std::string &query);
+
   /** @return The ID of the last transaction that was sent to the replicas. */
   transaction::timestamp_t GetLastSentTransactionId() const { return newest_txn_sent_; }
 

@@ -9,6 +9,7 @@
 #include "common/action_context.h"
 #include "common/dedicated_thread_registry.h"
 #include "common/managed_pointer.h"
+#include "loggers/replication_logger.h"
 #include "messenger/messenger.h"
 #include "metrics/metrics_defs.h"
 #include "metrics/metrics_thread.h"
@@ -574,6 +575,8 @@ class DBMain {
                                      transaction::DurabilityPolicyToString(default_txn_policy.durability_),
                                      transaction::ReplicationPolicyToString(default_txn_policy.replication_)));
       }
+
+      replication::replication_logger->set_level(spdlog::level::trace);
 
       db_main->settings_manager_ = std::move(settings_manager);
       db_main->metrics_manager_ = std::move(metrics_manager);

@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "replication/primary_replication_manager.h"
 #include "binder/bind_node_visitor.h"
 #include "binder/binder_util.h"
 #include "catalog/catalog.h"
@@ -397,6 +398,12 @@ std::variant<std::unique_ptr<parser::ParseResult>, common::ErrorData> TrafficCop
     error.AddField(common::ErrorField::POSITION, std::to_string(e.GetCursorPos()));
     result.emplace<common::ErrorData>(std::move(error));
   }
+
+  if (replication_manager_ != DISABLED && replication_manager_->IsPrimary()) {
+    auto repm = replication_manager_->GetAsPrimary();
+    repm->NotifyReplicasOfQuery(query);
+  }
+
   return result;
 }
 

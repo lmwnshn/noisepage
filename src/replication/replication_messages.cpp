@@ -12,6 +12,7 @@ const char *BaseReplicationMessage::key_message_type = "message_type";
 const char *BaseReplicationMessage::key_metadata = "metadata";
 const char *NotifyOATMsg::key_batch_id = "oat_batch";
 const char *NotifyOATMsg::key_oldest_active_txn = "oat_ts";
+const char *NotifyParsedQueryMsg::key_query_text = "query_text";
 const char *RecordsBatchMsg::key_batch_id = "batch_id";
 const char *RecordsBatchMsg::key_contents = "contents";
 const char *TxnAppliedMsg::key_applied_txn_id = "applied_txn_id";
@@ -150,6 +151,7 @@ std::unique_ptr<BaseReplicationMessage> BaseReplicationMessage::ParseFromString(
   switch (msg_type) {
     // clang-format off
     case ReplicationMessageType::NOTIFY_OAT:          { return std::make_unique<NotifyOATMsg>(message); }
+    case ReplicationMessageType::NOTIFY_PARSED_QUERY: { return std::make_unique<NotifyParsedQueryMsg>(message); }
     case ReplicationMessageType::RECORDS_BATCH:       { return std::make_unique<RecordsBatchMsg>(message); }
     case ReplicationMessageType::TXN_APPLIED:         { return std::make_unique<TxnAppliedMsg>(message); }
     case ReplicationMessageType::INVALID:             // Fall-through.
@@ -159,5 +161,13 @@ std::unique_ptr<BaseReplicationMessage> BaseReplicationMessage::ParseFromString(
   }
   throw REPLICATION_EXCEPTION("This case is impossible but GCC can't figure it out.");
 }
+
+// NotifyParsedQueryMsg
+
+NotifyParsedQueryMsg::NotifyParsedQueryMsg(const MessageWrapper &message)
+    : BaseReplicationMessage(message), query_(message.Get<std::string>(key_query_text)) {}
+
+NotifyParsedQueryMsg::NotifyParsedQueryMsg(ReplicationMessageMetadata metadata, const std::string query)
+    : BaseReplicationMessage(ReplicationMessageType::NOTIFY_PARSED_QUERY, metadata), query_(std::move(query)) {}
 
 }  // namespace noisepage::replication

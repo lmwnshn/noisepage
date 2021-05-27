@@ -24,6 +24,8 @@ namespace noisepage::replication {
   T(ReplicationMessageType, INVALID)                                                        \
   /** Primary notifying the replica of the oldest active txn time. */                       \
   T(ReplicationMessageType, NOTIFY_OAT)                                                     \
+  /** Primary notifying the replica that it saw a particular query. */                      \
+  T(ReplicationMessageType, NOTIFY_PARSED_QUERY)                                            \
   /** Primary sending the replica a batch of log records.*/                                 \
   T(ReplicationMessageType, RECORDS_BATCH)                                                  \
   /** Replica notifying the primary that the replica has applied a specific transaction. */ \
@@ -252,6 +254,22 @@ class TxnAppliedMsg : public BaseReplicationMessage {
  private:
   static const char *key_applied_txn_id;     ///< JSON key for the applied transaction ID.
   transaction::timestamp_t applied_txn_id_;  ///< The ID of the transaction that was applied on the replica.
+};
+
+/** Notify the replicas that the primary has parsed the following query. */
+class NotifyParsedQueryMsg : public BaseReplicationMessage {
+ public:
+  /** Constructor (to send). */
+  explicit NotifyParsedQueryMsg(ReplicationMessageMetadata metadata, std::string query);
+  /** Constructor (to receive). */
+  explicit NotifyParsedQueryMsg(const MessageWrapper &message);
+
+  /** @return The query text of the query that was parsed. */
+  const std::string &GetQueryText() const { return query_; }
+
+ private:
+  static const char *key_query_text;  ///< JSON key for the query text..
+  std::string query_;                 ///< The query that was parsed.
 };
 
 }  // namespace noisepage::replication
