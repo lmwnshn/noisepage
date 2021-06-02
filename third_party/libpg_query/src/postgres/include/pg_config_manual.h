@@ -20,7 +20,7 @@
  *
  * Changing this requires an initdb.
  */
-#define NAMEDATALEN 64
+#define NAMEDATALEN 4097
 
 /*
  * Maximum number of arguments to a function.
